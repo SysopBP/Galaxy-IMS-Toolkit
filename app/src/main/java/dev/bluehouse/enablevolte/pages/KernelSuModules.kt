@@ -90,7 +90,7 @@ private fun validateModuleZip(file: File): String? {
 }
 
 @Composable
-fun KernelSuModules() {
+fun KernelSuModules(openImsModuleBuilder: () -> Unit = {}) {
     val context = LocalContext.current
     var inventory by remember { mutableStateOf("Tap Refresh to inspect installed modules.") }
     var selected by remember { mutableStateOf<File?>(null) }
@@ -126,6 +126,23 @@ fun KernelSuModules() {
         Text("KernelSU Modules", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Inspect installed modules and install trusted ZIP packages. Installing modules executes privileged scripts.",
             style = MaterialTheme.typography.bodySmall)
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth(),
+            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFF25202C)),
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("GALAXY IMS • CSC MODULE", color = androidx.compose.ui.graphics.Color(0xFFFF7A7A),
+                    style = MaterialTheme.typography.labelMedium)
+                Text("Built-in CSC module builder", style = MaterialTheme.typography.titleLarge)
+                Text("Prepare and export a KernelSU-compatible CSC reference ZIP from the IMS XML Lab. " +
+                    "Current exports are inactive templates and do not apply carrier changes.",
+                    style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = openImsModuleBuilder, modifier = Modifier.fillMaxWidth()) {
+                    Text("Open IMS CSC module builder", color = androidx.compose.ui.graphics.Color.White)
+                }
+            }
+        }
         Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Installed modules", style = MaterialTheme.typography.titleMedium)
