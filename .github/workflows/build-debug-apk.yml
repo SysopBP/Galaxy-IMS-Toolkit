@@ -27,7 +27,6 @@ jobs:
           report-path: build/*.xml # Support glob patterns by https://www.npmjs.com/package/@actions/glob
         continue-on-error: false # If annotations contain error of severity, action-ktlint exit 1.
   build-debug-apk:
-    needs: [lint]
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/build-apk.yml
     with:
