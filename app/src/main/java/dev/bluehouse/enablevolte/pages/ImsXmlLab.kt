@@ -433,7 +433,9 @@ fun ImsXmlLab() {
             !cscTargetPath.contains("..") &&
             cscTargetPath.endsWith(".xml") &&
             cscTargetPath.none { character ->
-                character.code in setOf(0, 10, 13)
+                character == '\u0000' ||
+                    character == '\n' ||
+                    character == '\r'
             }
         Text(if (cscPathValid) "Target format valid (not device-verified)" else
             "Enter an absolute /system/...xml path without traversal.")
