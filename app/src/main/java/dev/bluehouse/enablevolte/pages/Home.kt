@@ -8,6 +8,16 @@ import android.telephony.SubscriptionManager
 import androidx.compose.runtime.remember
 import android.util.Log
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -99,46 +109,66 @@ fun Home(navController: NavController) {
         }
     }
 
-    Column(modifier = Modifier.padding(Dp(16f)).verticalScroll(scrollState)) {
-        HeaderText(text = "Galaxy device diagnostics")
-        StringPropertyView(label = "Manufacturer", value = Build.MANUFACTURER)
-        StringPropertyView(label = "Model", value = Build.MODEL)
-        StringPropertyView(label = "Android", value = Build.VERSION.RELEASE)
-        StringPropertyView(label = "Security patch", value = Build.VERSION.SECURITY_PATCH)
-        StringPropertyView(label = "Samsung device", value = if (Build.MANUFACTURER.equals("samsung", ignoreCase = true)) "Detected" else "Not detected")
-        HeaderText(text = stringResource(R.string.version))
-        if (newerVersion.isNotEmpty()) {
-            ClickablePropertyView(
-                label = BuildConfig.VERSION_NAME,
-                value = stringResource(R.string.newer_version_available, newerVersion),
-            ) {
-                val url = "https://github.com/SysopBP/Galaxy-IMS-Toolkit/releases/tag/$newerVersion"
-                val i = Intent(Intent.ACTION_VIEW)
-                i.data = url.toUri()
-                context.startActivity(i, null)
+    Column(
+        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp).verticalScroll(scrollState),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text("Galaxy overview", style = androidx.compose.material3.MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("Device and IMS status", color = Color(0xFFCDD3DD))
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA242A35)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("DEVICE", color = Color(0xFFB7C4DA), fontWeight = FontWeight.SemiBold)
+                Text(Build.MODEL, style = androidx.compose.material3.MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text("${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }}  •  Android ${Build.VERSION.RELEASE}")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Security patch", color = Color(0xFFBAC3D0))
+                    Text(Build.VERSION.SECURITY_PATCH)
+                }
             }
-        } else {
-            StringPropertyView(label = BuildConfig.VERSION_NAME, value = stringResource(R.string.running_latest_version))
         }
-        HeaderText(text = stringResource(R.string.permissions_capabilities))
-        StringPropertyView(label = "TokenX routing", value = "Not connected to TokenX transport; Shizuku authorization is separate")
-        BooleanPropertyView(label = stringResource(R.string.shizuku_service_running), toggled = shizukuEnabled)
-        BooleanPropertyView(label = stringResource(R.string.shizuku_permission_granted), toggled = shizukuGranted)
-        BooleanPropertyView(label = stringResource(R.string.sim_detected), toggled = subscriptions.isNotEmpty())
-        BooleanPropertyView(label = stringResource(R.string.volte_supported_by_device), toggled = deviceIMSEnabled)
-
-        for (idx in subscriptions.indices) {
-            var isRegistered = false
-            if (isIMSRegistered.isNotEmpty()) {
-                isRegistered = isIMSRegistered[idx]
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA242A35)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("CONNECTIVITY", color = Color(0xFFB7C4DA), fontWeight = FontWeight.SemiBold)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Shizuku service")
+                    Text(if (shizukuEnabled) "Connected" else "Not connected", color = if (shizukuEnabled) Color(0xFF9ADBB6) else Color(0xFFFFC48C))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("App permission")
+                    Text(if (shizukuGranted) "Granted" else "Not granted", color = if (shizukuGranted) Color(0xFF9ADBB6) else Color(0xFFFFC48C))
+                }
+                Text("TokenX UID 1000 is separate from app authorization.", color = Color(0xFFB5BECA), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
-            HeaderText(text = stringResource(R.string.ims_status_for, subscriptions[idx].uniqueName))
-            BooleanPropertyView(
-                label = stringResource(R.string.ims_status),
-                toggled = isRegistered,
-                trueLabel = stringResource(R.string.registered),
-                falseLabel = stringResource(R.string.unregistered),
-            )
+        }
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA242A35)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("IMS & SIM", color = Color(0xFFB7C4DA), fontWeight = FontWeight.SemiBold)
+                Text("Active SIMs: ${subscriptions.size}")
+                Text("Device IMS: ${if (deviceIMSEnabled) "Supported" else "Not verified"}")
+                subscriptions.forEachIndexed { index, sub ->
+                    val registered = isIMSRegistered.getOrNull(index)
+                    Text("${sub.uniqueName}: ${when (registered) { true -> "Registered"; false -> "Not registered"; null -> "Unknown" }}")
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Galaxy IMS Toolkit", fontWeight = FontWeight.SemiBold)
+            Text(BuildConfig.VERSION_NAME, color = Color(0xFFBBC4D0))
+        }
+        if (newerVersion.isNotEmpty()) {
+            Text("Update available: $newerVersion", color = Color(0xFFB7C4DA))
         }
     }
 }
