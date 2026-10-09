@@ -82,6 +82,24 @@ fun Config(
     var loading by rememberSaveable { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val simSlotIndex = moder.simSlotIndex
+    // Distinct identities: System for carrier writes; Root for module/file operations.
+    var rootAvailable by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        rootAvailable = withContext(Dispatchers.IO) {
+            try {
+                val process = ProcessBuilder("su", "-c", "id -u").redirectErrorStream(true).start()
+                val completed = process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)
+                if (!completed) {
+                    process.destroyForcibly()
+                    false
+                } else {
+                    process.exitValue() == 0 &&
+                        process.inputStream.bufferedReader().use { it.readText().trim() } == "0"
+                }
+            } catch (_: Exception) { false }
+        }
+    }
+
 
     fun loadFlags() {
         Log.d(TAG, "loadFlags")
@@ -154,6 +172,11 @@ fun Config(
                     Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED &&
                     Shizuku.getUid() == android.os.Process.SYSTEM_UID
             } catch (_: Exception) { false }
+            HeaderText(text = "Modification backends")
+            Text("Root UID 0: " + if (rootAvailable) "Available for KernelSU and protected files" else "Unavailable")
+            Text("System UID 1000: " + if (systemWriteReady) "Authorized Shizuku binder" else "Not authorized")
+            Text("SIM ${simSlotIndex + 1} · subscription ID $subId")
+            Text("IMS carrier writes require System UID 1000; Root is not an automatic fallback.")
             if (!systemWriteReady) {
                 HeaderText(text = "System permission required")
                 Text(
