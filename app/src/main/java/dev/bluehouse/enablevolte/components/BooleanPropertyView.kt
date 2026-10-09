@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
@@ -21,7 +22,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.sp
 import dev.bluehouse.enablevolte.R
 
@@ -52,20 +52,20 @@ fun BooleanPropertyView(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Text(text = label, modifier = Modifier.weight(1F), fontSize = 18.sp)
-            Switch(
-                checked = toggled,
-                enabled = localEnabled,
-                onCheckedChange = { requested ->
-                    try {
-                        onClick(requested)
-                    } catch (e: SecurityException) {
-                        Toast.makeText(context, "IMS change denied: System permission required", Toast.LENGTH_LONG).show()
-                    } catch (e: IllegalStateException) {
-                        Toast.makeText(context, e.message ?: "IMS change unavailable", Toast.LENGTH_LONG).show()
-                    }
-                },
-            )
+                Text(text = label, modifier = Modifier.weight(1F), fontSize = 18.sp)
+                Switch(
+                    checked = toggled,
+                    enabled = localEnabled,
+                    onCheckedChange = { requested ->
+                        try {
+                            onClick(requested)
+                        } catch (e: SecurityException) {
+                            Toast.makeText(context, "IMS change denied: System permission required", Toast.LENGTH_LONG).show()
+                        } catch (e: IllegalStateException) {
+                            Toast.makeText(context, e.message ?: "IMS change unavailable", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                )
             }
         }
     } else {
