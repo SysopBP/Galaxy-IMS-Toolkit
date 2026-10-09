@@ -62,6 +62,7 @@ fun ImsXmlLab() {
     var editorMessage by remember { mutableStateOf("") }
     var exportXml by remember { mutableStateOf("") }
     var previewChanges by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var previewMessage by remember { mutableStateOf("") }
     LaunchedEffect(rescan) {
         discoveryStatus = "Scanning protected IMS configuration…"
         val result = withContext(Dispatchers.IO) {
@@ -146,6 +147,21 @@ fun ImsXmlLab() {
             Text("Option previews are local only; they do not modify XML or IMS.")
             if (previewChanges.isNotEmpty()) {
                 Text("${previewChanges.size} staged option previews")
+                Button(onClick = {
+                    previewMessage = try {
+                        val updated = applyImsAttributePreviews(
+                            documents.getOrNull(selected)?.originalXml.orEmpty(),
+                            previewChanges,
+                        )
+                        validateImsXml(updated)
+                        draftXml = updated
+                        editMode = true
+                        "Changes staged in exportable draft."
+                    } catch (e: Exception) {
+                        "Cannot stage draft: ${e.message}"
+                    }
+                }) { Text("Stage attribute changes") }
+                if (previewMessage.isNotEmpty()) Text(previewMessage)
                 OutlinedButton(onClick = { previewChanges = emptyMap() }) {
                     Text("Reset option previews")
                 }
@@ -310,6 +326,49 @@ private fun readImsXml(context: android.content.Context, uri: Uri): XmlDocument 
     }
 }
 
+private fun applyImsAttributePreviews(original: String, previews: Map<String, String>): String {
+    require(original.length <= 2 * 1024 * 1024) { "XML too large" }
+    val entries = parseImsXml("draft", original.toByteArray(Charsets.UTF_8))
+    require(entries.error == null) { "Invalid source XML" }
+    val keys = entries.entries.withOccurrenceKeys()
+    require(previews.keys.all { it.contains("/@") && !it.contains("#") && it in keys }) {
+        "Only unique XML attributes can be staged"
+    }
+    val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+    factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+    factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+    factory.isXIncludeAware = false
+    factory.isExpandEntityReferences = false
+    val document = factory.newDocumentBuilder().parse(
+        org.xml.sax.InputSource(java.io.StringReader(original)),
+    )
+    val seen = mutableSetOf<String>()
+    fun visit(element: org.w3c.dom.Element, path: String) {
+        val attrs = element.attributes
+        for (index in 0 until attrs.length) {
+            val attr = attrs.item(index)
+            val key = "$path/@${attr.nodeName}"
+            val value = previews[key] ?: continue
+            require(seen.add(key)) { "Ambiguous repeated attribute" }
+            attr.nodeValue = value
+        }
+        val children = element.childNodes
+        for (index in 0 until children.length) {
+            val child = children.item(index)
+            if (child is org.w3c.dom.Element) visit(child, "$path/${child.tagName}")
+        }
+    }
+    visit(document.documentElement, document.documentElement.tagName)
+    require(seen.containsAll(previews.keys)) { "Some attributes were not found" }
+    val transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer()
+    val output = java.io.StringWriter()
+    transformer.transform(
+        javax.xml.transform.dom.DOMSource(document),
+        javax.xml.transform.stream.StreamResult(output),
+    )
+    return output.toString()
+}
 private fun classifyImsValue(value: String): String = when {
     value.equals("true", true) || value.equals("false", true) -> "Boolean"
     value == "0" || value == "1" -> "Boolean"
