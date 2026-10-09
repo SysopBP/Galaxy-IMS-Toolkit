@@ -51,6 +51,7 @@ import dev.bluehouse.enablevolte.pages.Config
 import dev.bluehouse.enablevolte.pages.DumpedConfig
 import dev.bluehouse.enablevolte.pages.Editor
 import dev.bluehouse.enablevolte.pages.Home
+import dev.bluehouse.enablevolte.pages.GalaxyImsSettings
 import dev.bluehouse.enablevolte.ui.theme.EnableVoLTETheme
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 import rikka.shizuku.Shizuku
@@ -96,6 +97,7 @@ fun PixelIMSApp() {
     var subscriptions by rememberSaveable { mutableStateOf(listOf<SubscriptionInfo>()) }
     var navBuilder by remember {
         mutableStateOf<NavGraphBuilder.() -> Unit>({
+            composable("ims-research", "Samsung IMS") { GalaxyImsSettings() }
             composable("home", context.resources.getString(R.string.home)) {
                 Home(navController)
             }
@@ -104,6 +106,7 @@ fun PixelIMSApp() {
 
     fun generateInitialNavBuilder(): (NavGraphBuilder.() -> Unit) =
         {
+            composable("ims-research", "Samsung IMS") { GalaxyImsSettings() }
             composable("home", "Home") {
                 Home(navController)
             }
@@ -204,6 +207,7 @@ fun PixelIMSApp() {
                     val items =
                         arrayListOf(
                             Screen("home", stringResource(R.string.home), Icons.Filled.Home),
+                            Screen("ims-research", "Samsung IMS", Icons.Filled.Settings),
                         )
                     for (subscription in subscriptions) {
                         items.add(
