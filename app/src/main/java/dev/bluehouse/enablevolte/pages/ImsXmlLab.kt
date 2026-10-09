@@ -51,6 +51,17 @@ fun ImsXmlLab() {
     var discoveryStatus by remember { mutableStateOf("Scanning device IMS XML files…") }
     var backendStatus by remember { mutableStateOf("Root backend not checked") }
     var rescan by remember { mutableIntStateOf(0) }
+    var filter by remember { mutableStateOf("") }
+    var valueType by remember { mutableStateOf("All") }
+    var selected by remember { mutableIntStateOf(0) }
+    var comparison by remember { mutableIntStateOf(0) }
+    var differencesOnly by remember { mutableStateOf(true) }
+    var showResetConfirmation by remember { mutableStateOf(false) }
+    var draftXml by remember { mutableStateOf("") }
+    var editMode by remember { mutableStateOf(false) }
+    var editorMessage by remember { mutableStateOf("") }
+    var exportXml by remember { mutableStateOf("") }
+    var previewChanges by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     LaunchedEffect(rescan) {
         discoveryStatus = "Scanning protected IMS configuration…"
         val result = withContext(Dispatchers.IO) {
@@ -63,6 +74,7 @@ fun ImsXmlLab() {
                 selected = 0
                 comparison = if (found.size > 1) 1 else 0
                 draftXml = found.first().originalXml
+                previewChanges = emptyMap()
             }
             discoveryStatus = if (found.isEmpty()) {
                 "No accessible IMS XML found. You can import files manually."
@@ -73,16 +85,6 @@ fun ImsXmlLab() {
             discoveryStatus = "Automatic scan unavailable: ${it.javaClass.simpleName}."
         }
     }
-    var filter by remember { mutableStateOf("") }
-    var valueType by remember { mutableStateOf("All") }
-    var selected by remember { mutableIntStateOf(0) }
-    var comparison by remember { mutableIntStateOf(0) }
-    var differencesOnly by remember { mutableStateOf(true) }
-    var showResetConfirmation by remember { mutableStateOf(false) }
-    var draftXml by remember { mutableStateOf("") }
-    var editMode by remember { mutableStateOf(false) }
-    var editorMessage by remember { mutableStateOf("") }
-    var exportXml by remember { mutableStateOf("") }
     val exporter = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/xml"),
     ) { uri ->
@@ -103,6 +105,7 @@ fun ImsXmlLab() {
         comparison = if (documents.size > 1) 1 else 0
         draftXml = documents.firstOrNull()?.originalXml.orEmpty()
         editMode = false
+        previewChanges = emptyMap()
     }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("IMS XML Lab", style = MaterialTheme.typography.headlineSmall)
@@ -119,7 +122,7 @@ fun ImsXmlLab() {
         } else {
             Text("${documents.size} files imported")
             documents.forEachIndexed { index, document ->
-                TextButton(onClick = { selected = index; draftXml = document.originalXml; editMode = false; editorMessage = "" }) {
+                TextButton(onClick = { selected = index; draftXml = document.originalXml; editMode = false; editorMessage = ""; previewChanges = emptyMap() }) {
                     Text("${if (selected == index) "● " else ""}${document.name} (${document.entries.size} entries)")
                 }
             }
@@ -139,6 +142,13 @@ fun ImsXmlLab() {
                 OutlinedButton(onClick = { editMode = !editMode }) { Text(if (editMode) "Close editor" else "Edit XML") }
                 Spacer(Modifier.width(8.dp))
                 OutlinedButton(onClick = { showResetConfirmation = true }) { Text("Reset") }
+            }
+            Text("Option previews are local only; they do not modify XML or IMS.")
+            if (previewChanges.isNotEmpty()) {
+                Text("${previewChanges.size} staged option previews")
+                OutlinedButton(onClick = { previewChanges = emptyMap() }) {
+                    Text("Reset option previews")
+                }
             }
             if (editMode) {
                 Text("Editable draft — original imported XML remains unchanged.")
@@ -189,6 +199,7 @@ fun ImsXmlLab() {
                             differencesOnly = true
                             draftXml = ""
                             editMode = false
+                            previewChanges = emptyMap()
                             editorMessage = ""
                             showResetConfirmation = false
                         }) { Text("Reset lab") }
@@ -239,11 +250,35 @@ fun ImsXmlLab() {
                                 Text(right[key] ?: "—", Modifier.weight(1f))
                             }
                         } else {
-                            Text(left[key].orEmpty())
-                            Text(
-                                classifyImsValue(left[key].orEmpty()) + " • stored value",
-                                style = MaterialTheme.typography.labelSmall,
-                            )
+                            val stored = left[key].orEmpty()
+                            val kind = classifyImsValue(stored)
+                            val preview = previewChanges[key] ?: stored
+                            if (kind == "Boolean") {
+                                val enabled = preview.equals("true", true) || preview == "1"
+                                Checkbox(
+                                    checked = enabled,
+                                    onCheckedChange = { checked ->
+                                        val next = if (stored == "0" || stored == "1") {
+                                            if (checked) "1" else "0"
+                                        } else {
+                                            checked.toString()
+                                        }
+                                        previewChanges = previewChanges + (key to next)
+                                    },
+                                )
+                            } else {
+                                OutlinedTextField(
+                                    value = preview,
+                                    onValueChange = { next ->
+                                        previewChanges = previewChanges + (key to next.take(1000))
+                                    },
+                                    label = { Text("$kind preview") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            if (preview != stored) Text("Original: $stored")
+                            Text("Preview only • not applied", style = MaterialTheme.typography.labelSmall)
                         }
                         HorizontalDivider()
                     }
