@@ -15,6 +15,7 @@ import android.telephony.CarrierConfigManager
 import android.telephony.SubscriptionInfo
 import android.telephony.TelephonyFrameworkInitializer
 import android.util.Log
+import rikka.shizuku.Shizuku
 import androidx.annotation.RequiresApi
 import com.android.internal.telephony.ICarrierConfigLoader
 import com.android.internal.telephony.IPhoneSubInfo
@@ -195,27 +196,46 @@ class SubscriptionModer(
             }
         arg.putInt("moder_subId", subscriptionId)
 
-        try {
-            val started = am.startInstrumentation(
-                ComponentName(context, Class.forName("dev.bluehouse.enablevolte.BrokerInstrumentation")),
-                null,
-                8,
-                arg,
-                null,
-                UiAutomationConnection(),
-                0,
-                null,
-            )
-            if (!started) {
-                throw IllegalStateException("IMS broker instrumentation could not be started")
+        am.startInstrumentation(
+            ComponentName(context, Class.forName("dev.bluehouse.enablevolte.BrokerInstrumentation")),
+            null,
+            8,
+            arg,
+            null,
+            UiAutomationConnection(),
+            0,
+            null,
+        )
+    }
+
+    /**
+     * Carrier configuration writes require a verified system identity.
+     * A rooted manager or TokenX session elsewhere does not authorize this app.
+     * Fail closed until the app's own Shizuku binder is running as UID 1000.
+     */
+    private fun requireSystemWriteBackend() {
+        val uid = try {
+            if (!Shizuku.pingBinder() ||
+                Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                -1
+            } else {
+                Shizuku.getUid()
             }
-        } catch (e: SecurityException) {
-            Log.e(TAG, "IMS broker denied: system identity or signing requirements not met", e)
-            throw IllegalStateException("IMS toggle requires an authorized System backend; change not applied", e)
+        } catch (e: Exception) {
+            Log.w(TAG, "Cannot verify system binder identity", e)
+            -1
+        }
+        if (uid != android.os.Process.SYSTEM_UID) {
+            throw IllegalStateException(
+                "Carrier configuration write blocked: System UID 1000 binder required; detected UID $uid. " +
+                    "Authorize this app through a verified System backend before retrying.",
+            )
         }
     }
 
     private fun overrideConfig(bundle: Bundle?) {
+        requireSystemWriteBackend()
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val cal = Calendar.getInstance()
         val securityPatchDate = sdf.parse(Build.VERSION.SECURITY_PATCH)
@@ -306,6 +326,7 @@ class SubscriptionModer(
     }
 
     fun restartIMSRegistration() {
+        requireSystemWriteBackend()
         val telephony = this.loadCachedInterface { telephony }
         val sub = this.loadCachedInterface { sub }
         telephony.resetIms(sub.getSlotIndex(this.subscriptionId))
