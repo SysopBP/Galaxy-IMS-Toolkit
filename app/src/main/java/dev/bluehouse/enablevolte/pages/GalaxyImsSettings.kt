@@ -58,6 +58,16 @@ private fun runDiagnostic(command: String): String {
     return "Exit ${process.exitValue()}: ${output.toString().take(12000)}"
 }
 
+// Read only the relevant Samsung registration lines at the source. The full
+// secims dump contains extensive historical logs and subscriber identifiers.
+private fun samsungRegistrationSummary(): String = runDiagnostic(
+    "dumpsys secims 2>&1 | grep -E 'SIM slot: \\[|state: \\[|enableService(Volte|Vowifi|Rcs|Vilte)=' | tail -80"
+)
+
+private fun privilegedSubscriptionSummary(): String = runDiagnostic(
+    "dumpsys isub 2>&1 | grep -E '^(Active modem count=|  Logical SIM slot [0-9]+:|mSimState\\[[0-9]+\\]=)' | head -12"
+)
+
 private fun inspectIms(context: Context): DiagnosticResult {
     val report = StringBuilder("Galaxy IMS Toolkit - Read-only diagnostics\n")
     report.appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
@@ -67,7 +77,7 @@ private fun inspectIms(context: Context): DiagnosticResult {
     val subscriptions = context.getSystemService(SubscriptionManager::class.java)
     try {
         val ids = subscriptions?.activeSubscriptionInfoList.orEmpty()
-        status.appendLine("Active subscriptions: ${ids.size}")
+        status.appendLine("App-visible active subscriptions: ${ids.size}")
         ids.forEach { sub ->
             status.appendLine("SIM slot ${sub.simSlotIndex + 1}: subscription ${sub.subscriptionId}")
             try {
@@ -114,25 +124,37 @@ private fun inspectIms(context: Context): DiagnosticResult {
     status.appendLine("Carrier toggles: existing Shizuku/instrumentation route; TokenX routing not enabled")
     if (rootAvailable) {
         // Never modify IMS or carrier settings here.
-        val secims = try { runDiagnostic("dumpsys secims") } catch (e: Exception) {
-            "secims failed: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(180)}"
+        val subSummary = try { privilegedSubscriptionSummary() } catch (e: Exception) {
+            "Subscription service query failed: ${e.javaClass.simpleName}"
         }
-        val summary = secims.lines().filter {
-            it.contains("RegistrationManager", true) ||
-                it.contains("REGISTERED", true) ||
-                it.contains("REGISTERING", true) ||
-                it.contains("SIM slot:", true)
-        }.take(18)
-        status.appendLine("Samsung IMS: ${if (summary.isEmpty()) "no registration summary detected" else "diagnostic output available"}")
-        if (summary.isNotEmpty()) status.appendLine(summary.joinToString("\n"))
-        report.appendLine("secims dump (limited):\n$secims")
-        if (summary.isEmpty()) {
-            val fallback = try { runDiagnostic("dumpsys ims") } catch (e: Exception) {
-                "IMS fallback failed: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(180)}"
+        status.appendLine("Android subscription service (privileged):")
+        status.appendLine(subSummary)
+        report.appendLine("Privileged subscription summary:\\n$subSummary")
+        val secims = try { samsungRegistrationSummary() } catch (e: Exception) {
+            "Samsung registration query failed: ${e.javaClass.simpleName}"
+        }
+        val registrations = secims.lines().filter {
+            it.contains("SIM slot: [") && it.contains("state: [")
+        }
+        status.appendLine("Samsung IMS registration (per profile):")
+        if (registrations.isEmpty()) {
+            status.appendLine("No registration records returned; service output may be restricted.")
+        } else {
+            registrations.forEach { line ->
+                // Only report the profile identity and state, not SIP addresses or IPs.
+                val slot = Regex("SIM slot: \\[([0-9]+)\\]").find(line)?.groupValues?.get(1)
+                val state = Regex("state: \\[([^]]+)\\]").find(line)?.groupValues?.get(1)
+                val profile = Regex("Name : ([^,\\]]+)").find(line)?.groupValues?.get(1)
+                if (slot != null && state != null) {
+                    status.appendLine("SIM slot ${slot.toInt() + 1}: $state (${profile ?: "IMS profile"})")
+                }
             }
-            report.appendLine("IMS fallback (limited):\n$fallback")
-            status.appendLine("Fallback: dumpsys ims attempted; see exported report")
         }
+        report.appendLine("Samsung registration summary:\\n" + status.lines().filter {
+            it.startsWith("SIM slot ") && it.contains(" (")
+        }.joinToString("\\n"))
+        status.appendLine("Capability flags indicate configuration, not confirmed service use.")
+
     } else {
         status.appendLine("Samsung dumpsys diagnostics require working root.")
     }
