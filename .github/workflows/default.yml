@@ -1,8 +1,9 @@
-name: default
+name: Tagged Release
 
 on:
   push:
-  pull_request:
+    tags:
+      - 'v*'
 permissions:
   pull-requests: write
 
