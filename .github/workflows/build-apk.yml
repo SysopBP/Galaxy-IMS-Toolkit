@@ -42,10 +42,18 @@ jobs:
           packages: ""
       - name: Install required platform
         run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
-      - name: Verify Android platform archive
+      - name: Install verified full framework API stubs
         run: |
-          test -s "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
-          unzip -t "$ANDROID_SDK_ROOT/platforms/android-36/android.jar" >/dev/null
+          set -euo pipefail
+          SDK_JAR="$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+          curl --fail --location --retry 3 --silent --show-error \
+            "https://raw.githubusercontent.com/Reginer/aosp-android-jar/main/android-36/android.jar" \
+            -o /tmp/android-full-api.jar
+          test "$(stat -c%s /tmp/android-full-api.jar)" -gt 1000000
+          unzip -t /tmp/android-full-api.jar >/dev/null
+          unzip -l /tmp/android-full-api.jar | grep -q 'android/os/ServiceManager.class'
+          cp /tmp/android-full-api.jar "$SDK_JAR"
+          unzip -t "$SDK_JAR" >/dev/null
       - name: Build APK
         id: build_apk
         run: |
@@ -54,7 +62,7 @@ jobs:
             echo "upload_filename=${RUN_ID}-APK" >> $GITHUB_OUTPUT
             echo "build_filename=app-release-unsigned.apk" >> $GITHUB_OUTPUT
           else
-            ./gradlew assemble
+            ./gradlew assembleDebug
             echo "upload_filename=${RUN_ID}.debug.apk" >> $GITHUB_OUTPUT
             echo "build_filename=app-debug.apk" >> $GITHUB_OUTPUT
           fi
