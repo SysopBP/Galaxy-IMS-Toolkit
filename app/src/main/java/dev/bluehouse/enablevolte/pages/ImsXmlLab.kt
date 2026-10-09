@@ -318,10 +318,12 @@ fun ImsXmlLab() {
         editMode = false
         previewChanges = emptyMap()
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("DEVICE XML LIBRARY", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         Text("Explore IMS and carrier configurations", style = MaterialTheme.typography.titleLarge)
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(20.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Library overview", style = MaterialTheme.typography.titleMedium)
                 Text(discoveryStatus, style = MaterialTheme.typography.bodyMedium)
