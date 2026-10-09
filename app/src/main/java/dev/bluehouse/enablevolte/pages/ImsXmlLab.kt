@@ -58,7 +58,12 @@ fun ImsXmlLab() {
             runCatching { discoverImsXml() }
         }
         result.onSuccess { found ->
-            if (found.isNotEmpty()) documents = found
+            if (found.isNotEmpty()) {
+                documents = found
+                selected = 0
+                comparison = if (found.size > 1) 1 else 0
+                draftXml = found.first().originalXml
+            }
             discoveryStatus = if (found.isEmpty()) {
                 "No accessible IMS XML found. You can import files manually."
             } else {
@@ -69,6 +74,7 @@ fun ImsXmlLab() {
         }
     }
     var filter by remember { mutableStateOf("") }
+    var valueType by remember { mutableStateOf("All") }
     var selected by remember { mutableIntStateOf(0) }
     var comparison by remember { mutableIntStateOf(0) }
     var differencesOnly by remember { mutableStateOf(true) }
@@ -199,6 +205,13 @@ fun ImsXmlLab() {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Row {
+                listOf("All", "Boolean", "Number", "Text").forEach { type ->
+                    TextButton(onClick = { valueType = type }) {
+                        Text(if (valueType == type) "● $type" else type)
+                    }
+                }
+            }
             val current = documents.getOrNull(selected)
             if (current?.error != null) Text(current.error, color = MaterialTheme.colorScheme.error)
             val other = documents.getOrNull(comparison)
@@ -209,7 +222,8 @@ fun ImsXmlLab() {
             val visible = keys.filter { key ->
                 val before = left[key]
                 val after = right[key]
-                (!comparing || !differencesOnly || before != after) &&
+                (valueType == "All" || classifyImsValue(before.orEmpty()) == valueType) &&
+                    (!comparing || !differencesOnly || before != after) &&
                     (filter.isBlank() || key.contains(filter, true) ||
                         before.orEmpty().contains(filter, true) || after.orEmpty().contains(filter, true))
             }.take(1500)
@@ -226,6 +240,10 @@ fun ImsXmlLab() {
                             }
                         } else {
                             Text(left[key].orEmpty())
+                            Text(
+                                classifyImsValue(left[key].orEmpty()) + " • stored value",
+                                style = MaterialTheme.typography.labelSmall,
+                            )
                         }
                         HorizontalDivider()
                     }
@@ -255,6 +273,13 @@ private fun readImsXml(context: android.content.Context, uri: Uri): XmlDocument 
     } catch (e: Exception) {
         XmlDocument(name, emptyList(), "Cannot inspect XML: ${e.message}")
     }
+}
+
+private fun classifyImsValue(value: String): String = when {
+    value.equals("true", true) || value.equals("false", true) -> "Boolean"
+    value == "0" || value == "1" -> "Boolean"
+    value.toDoubleOrNull() != null -> "Number"
+    else -> "Text"
 }
 
 private fun checkImsRootBackend(): String {
