@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.Color
@@ -321,24 +323,26 @@ fun ImsXmlLab() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("DEVICE XML LIBRARY", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Text("Explore IMS and carrier configurations", style = MaterialTheme.typography.titleLarge)
+        Text("Explore IMS and carrier configurations", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Library overview", style = MaterialTheme.typography.titleMedium)
+                Text("Library overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(discoveryStatus, style = MaterialTheme.typography.bodyMedium)
                 if (cacheStatus.isNotEmpty()) Text(cacheStatus, style = MaterialTheme.typography.bodySmall)
                 Text("Read-only device inspection • originals stay unchanged", style = MaterialTheme.typography.labelSmall)
             }
         }
-        Card(shape = RoundedCornerShape(20.dp)) {
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1B2029))) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Browse files", style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Browse files", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("All", "IMS", "CSC", "Carrier JSON").forEach { choice ->
-                        TextButton(onClick = { category = choice }) {
-                            Text(if (category == choice) "● $choice" else choice, style = MaterialTheme.typography.labelSmall)
-                        }
+                        FilterChip(
+                            selected = category == choice,
+                            onClick = { category = choice },
+                            label = { Text(choice, style = MaterialTheme.typography.labelSmall) },
+                        )
                     }
                 }
                 val carrierCodes = documents.mapNotNull { doc ->
@@ -346,7 +350,7 @@ fun ImsXmlLab() {
                         .find(doc.name)?.groupValues?.getOrNull(1)
                 }.distinct().sorted()
                 Text("CSC profiles: ${carrierCodes.size}", style = MaterialTheme.typography.bodyMedium)
-                Text("Available carrier codes: " + carrierCodes.joinToString(", ").take(400), style = MaterialTheme.typography.bodySmall)
+                Text("Available carrier codes: " + carrierCodes.joinToString(", ").ifBlank { "None discovered" }.take(400), style = MaterialTheme.typography.bodySmall)
                 Text("Carrier profiles are references, not verified active configurations.", style = MaterialTheme.typography.labelSmall)
             }
         }
