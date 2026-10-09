@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -22,30 +21,39 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
-private data class ImsTask(val slot: Int, val state: String, val profile: String, val pdn: String)
-
-private fun readRegistration(): String {
-    val process = ProcessBuilder("su", "-c", "dumpsys secims | sed -n '/Dump of RegistrationManager:/,/EventLog(RegiMgr):/p' | head -120").redirectErrorStream(true).start()
-    val finished = process.waitFor(12, TimeUnit.SECONDS)
-    if (!finished) {
+private fun readSamsungIms(): String {
+    val command = "dumpsys secims | sed -n '/Dump of RegistrationManager:/,/EventLog(RegiMgr):/p' | head -160"
+    val process = ProcessBuilder("su", "-c", command)
+        .redirectErrorStream(true)
+        .start()
+    if (!process.waitFor(12, TimeUnit.SECONDS)) {
         process.destroyForcibly()
-        return "ERROR: IMS diagnostic timed out"
+        return "IMS diagnostic timed out"
     }
-    if (process.exitValue() != 0) return "ERROR: Root access or IMS diagnostic unavailable"
-    // Parse only the live RegistrationManager task block; never show raw SIP identities.
-    val text = process.inputStream.bufferedReader().use { it.readText().take(2_000_000) }
-    val start = text.indexOf("Dump of RegistrationManager:")
-    if (start < 0) return "ERROR: Samsung RegistrationManager not found"
-    val end = text.indexOf("EventLog(RegiMgr):", start).let { if (it < 0) text.length else it }
-    val block = text.substring(start, end)
-    val task = Regex("""SIM slot: \\[(\\d+)] state: \\[([^]]+)] IMS Profile: \\[Name : ([^,]+),[^\\n]*?pdn : ([^,\\]]+)""")
-    val tasks = task.findAll(block).map {
-        ImsTask(it.groupValues[1].toInt(), it.groupValues[2], it.groupValues[3], it.groupValues[4])
-    }.filter { it.pdn.trim() == "ims" }.toList()
-    if (tasks.isEmpty()) return "No active IMS PDN tasks found (or unsupported Samsung format)"
-    return tasks.groupBy { it.slot }.toSortedMap().entries.joinToString("\\n\\n") { (slot, entries) ->
-        val active = entries.firstOrNull { it.state == "REGISTERED" } ?: entries.first()
-        "SIM ${slot + 1}: ${active.state}\\nCarrier profile: ${active.profile}\\nPDN: ${active.pdn}"
+    if (process.exitValue() != 0) {
+        return "Root or Samsung IMS diagnostic unavailable"
+    }
+    val output = process.inputStream.bufferedReader().use { it.readText().take(30000) }
+    if (!output.contains("Dump of RegistrationManager:")) {
+        return "Samsung RegistrationManager not found"
+    }
+    val slotPattern = Regex("""SIM slot:\s*\[?(\d+)\]?""")
+    val statePattern = Regex("""state:\s*\[?(REGISTERED|REGISTERING|IDLE|CONNECTING|CONNECTED|DEREGISTERING)\]?""")
+    val lines = output.lines()
+    val summaries = mutableListOf<String>()
+    var currentSlot: String? = null
+    for (line in lines) {
+        slotPattern.find(line)?.let { currentSlot = it.groupValues[1] }
+        val state = statePattern.find(line)?.groupValues?.get(1)
+        if (state != null && currentSlot != null) {
+            val summary = "SIM ${currentSlot!!.toInt() + 1}: $state"
+            if (!summaries.contains(summary)) summaries.add(summary)
+        }
+    }
+    return if (summaries.isEmpty()) {
+        "RegistrationManager detected; task format needs device validation"
+    } else {
+        summaries.joinToString(separator = "\n")
     }
 }
 
@@ -53,31 +61,33 @@ private fun readRegistration(): String {
 @Composable
 fun GalaxyImsSettings() {
     var result by remember { mutableStateOf("Reading Samsung IMS registration…") }
-    var loading by remember { mutableStateOf(false) }
-    suspend fun refresh() {
-        loading = true
+    var loading by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
         result = withContext(Dispatchers.IO) {
-            try { readRegistration() } catch (e: Exception) { "ERROR: ${e.javaClass.simpleName}" }
+            try {
+                readSamsungIms()
+            } catch (e: Exception) {
+                "IMS diagnostic unavailable: ${e.javaClass.simpleName}"
+            }
         }
         loading = false
     }
-    LaunchedEffect(Unit) { refresh() }
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Samsung IMS · Read-only alpha")
-        Text("Current registration tasks are read from Samsung's RegistrationManager. Historical events are excluded.")
+        Text("Samsung IMS - Read-only alpha")
+        Text("Registration tasks are diagnostic data, not proof that carrier features are provisioned.")
         Card {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(result)
             }
         }
-        Button(onClick = { /* Refresh is handled by changing request state below */ }, enabled = false) {
-            Text("Live editing not enabled")
-        }
         if (loading) CircularProgressIndicator()
-        Text("Global Settings editor: research mode. VoLTE, VoWiFi, RCS and other switches will remain read-only until effective per-SIM storage, backup and rollback are verified.")
-        Text("No IMS configuration, emergency calling profile, or carrier provisioning is modified.")
+        Text("Global Settings editor: research mode. Configuration changes are disabled.")
+        Text("No IMS configuration or emergency calling settings are modified.")
     }
 }
