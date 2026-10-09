@@ -147,7 +147,7 @@ fun Config(
         InfiniteLoadingDialog()
     } else {
         Column(modifier = Modifier.padding(Dp(16f)).verticalScroll(scrollState)) {
-            ClickablePropertyView(label = "Samsung IMS Profiles", onClick = {
+            ClickablePropertyView(label = "Samsung IMS Profiles", value = "Read-only slot diagnostics", onClick = {
                 navController.navigate("config${subId}/imsprofiles")
             })
             HeaderText(text = stringResource(R.string.feature_toggles))
