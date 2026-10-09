@@ -195,16 +195,24 @@ class SubscriptionModer(
             }
         arg.putInt("moder_subId", subscriptionId)
 
-        am.startInstrumentation(
-            ComponentName(context, Class.forName("dev.bluehouse.enablevolte.BrokerInstrumentation")),
-            null,
-            8,
-            arg,
-            null,
-            UiAutomationConnection(),
-            0,
-            null,
-        )
+        try {
+            val started = am.startInstrumentation(
+                ComponentName(context, Class.forName("dev.bluehouse.enablevolte.BrokerInstrumentation")),
+                null,
+                8,
+                arg,
+                null,
+                UiAutomationConnection(),
+                0,
+                null,
+            )
+            if (!started) {
+                throw IllegalStateException("IMS broker instrumentation could not be started")
+            }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "IMS broker denied: system identity or signing requirements not met", e)
+            throw IllegalStateException("IMS toggle requires an authorized System backend; change not applied", e)
+        }
     }
 
     private fun overrideConfig(bundle: Bundle?) {
