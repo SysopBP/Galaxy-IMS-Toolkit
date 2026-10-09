@@ -132,7 +132,7 @@ fun PixelIMSApp() {
     val carrierModer = CarrierModer(context)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
 
-    var subscriptions by rememberSaveable { mutableStateOf(listOf<SubscriptionInfo>()) }
+    var subscriptions by remember { mutableStateOf(listOf<SubscriptionInfo>()) }
     var navBuilder by remember {
         mutableStateOf<NavGraphBuilder.() -> Unit>({
             composable("xml_lab", "IMS XML Lab") { ImsXmlLab() }
@@ -334,13 +334,13 @@ fun PixelIMSApp() {
                                     // avoid building up a large stack of destinations
                                     // on the back stack as users select items
                                     popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
+                                        saveState = false
                                     }
                                     // Avoid multiple copies of the same destination when
                                     // reselecting the same item
                                     launchSingleTop = true
                                     // Restore state when reselecting a previously selected item
-                                    restoreState = true
+                                    restoreState = false
                                 }
                             },
                         )
@@ -369,7 +369,18 @@ fun PixelIMSApp() {
                     Image(bitmap, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = 0.35f)
                 }
             }
-            NavHost(navController, startDestination = "home", Modifier.padding(innerPadding), builder = navBuilder)
+            NavHost(navController, startDestination = "home", Modifier.padding(innerPadding)) {
+                composable("home", "Home") { Home(navController) }
+                composable("ims-research", "Samsung IMS") { GalaxyImsSettings() }
+                composable("xml_lab", "IMS XML Lab") { ImsXmlLab() }
+                for (subscription in subscriptions) {
+                    navigation(startDestination = "config${subscription.subscriptionId}", route = "config${subscription.subscriptionId}root") {
+                        composable("config${subscription.subscriptionId}", "SIM config") { Config(navController, subscription.subscriptionId) }
+                        composable("config${subscription.subscriptionId}/dump", "Config dump") { DumpedConfig(context, subscription.subscriptionId) }
+                        composable("config${subscription.subscriptionId}/edit", "Expert mode") { Editor(subscription.subscriptionId) }
+                    }
+                }
+            }
         }
     }
 }
