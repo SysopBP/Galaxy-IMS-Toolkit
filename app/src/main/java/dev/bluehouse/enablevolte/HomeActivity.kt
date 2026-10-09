@@ -26,6 +26,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.SimCard
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -281,7 +284,7 @@ fun PixelIMSApp() {
         bottomBar = {
             if (currentBackStackEntry?.destination?.depth?.let { it == 1 } == true) {
                 Surface(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 5.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
                     shape = RoundedCornerShape(if (themeMode == "miuix") 36.dp else 30.dp),
                     color = when (themeMode) {
                         "glass" -> Color(0x66434B60)
@@ -293,7 +296,7 @@ fun PixelIMSApp() {
                     shadowElevation = 12.dp,
                 ) {
                     NavigationBar(
-                        modifier = Modifier.height(66.dp),
+                        modifier = Modifier.height(58.dp),
                         containerColor = Color.Transparent,
                         tonalElevation = 0.dp,
                     ) {
@@ -301,20 +304,20 @@ fun PixelIMSApp() {
                     val items =
                         arrayListOf(
                             Screen("home", stringResource(R.string.home), Icons.Filled.Home),
-                            Screen("ims-research", "Samsung IMS", Icons.Filled.Settings),
-                            Screen("xml_lab", "XML Lab", Icons.Filled.Settings),
+                            Screen("ims-research", "IMS", Icons.Filled.Tune),
+                            Screen("xml_lab", "XML Lab", Icons.Filled.Description),
                         )
                     for (subscription in subscriptions) {
                         items.add(
-                            Screen("config${subscription.subscriptionId}", subscription.uniqueName, Icons.Filled.Settings),
+                            Screen("config${subscription.subscriptionId}", "SIM ${subscriptions.indexOf(subscription) + 1}", Icons.Filled.SimCard),
                         )
                     }
 
                     items.forEach { screen ->
                         NavigationBarItem(
-                            icon = { Icon(screen.icon, contentDescription = null, modifier = Modifier.height(20.dp)) },
+                            icon = { Icon(screen.icon, contentDescription = null, modifier = Modifier.height(19.dp)) },
                             label = {
-                                Text(screen.title, fontSize = 10.sp, maxLines = 1)
+                                Text(screen.title, fontSize = 9.sp, maxLines = 1)
                             },
                             selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                             colors = NavigationBarItemDefaults.colors(
