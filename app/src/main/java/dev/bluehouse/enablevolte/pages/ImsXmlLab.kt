@@ -26,9 +26,13 @@ fun ImsXmlLab() {
     var documents by remember { mutableStateOf<List<XmlDocument>>(emptyList()) }
     var filter by remember { mutableStateOf("") }
     var selected by remember { mutableIntStateOf(0) }
+    var comparison by remember { mutableIntStateOf(0) }
+    var differencesOnly by remember { mutableStateOf(true) }
+    var showResetConfirmation by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         documents = uris.take(12).map { uri -> readImsXml(context, uri) }
         selected = 0
+        comparison = if (documents.size > 1) 1 else 0
     }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("IMS XML Lab", style = MaterialTheme.typography.headlineSmall)
@@ -46,6 +50,41 @@ fun ImsXmlLab() {
                     Text("${if (selected == index) "● " else ""}${document.name} (${document.entries.size} entries)")
                 }
             }
+            if (documents.size > 1) {
+                Text("Compare against")
+                documents.forEachIndexed { index, document ->
+                    TextButton(onClick = { comparison = index }) {
+                        Text("${if (comparison == index) "● " else ""}${document.name}")
+                    }
+                }
+                Row {
+                    Checkbox(checked = differencesOnly, onCheckedChange = { differencesOnly = it })
+                    Text("Differences only")
+                }
+            }
+            OutlinedButton(onClick = { showResetConfirmation = true }) {
+                Text("Reset XML Lab to imported defaults")
+            }
+            if (showResetConfirmation) {
+                AlertDialog(
+                    onDismissRequest = { showResetConfirmation = false },
+                    title = { Text("Reset XML Lab?") },
+                    text = { Text("Clear imported files, filters and comparisons. This does NOT restore live IMS or carrier settings.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            documents = emptyList()
+                            filter = ""
+                            selected = 0
+                            comparison = 0
+                            differencesOnly = true
+                            showResetConfirmation = false
+                        }) { Text("Reset lab") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showResetConfirmation = false }) { Text("Cancel") }
+                    },
+                )
+            }
             OutlinedTextField(
                 value = filter,
                 onValueChange = { filter = it },
@@ -55,12 +94,34 @@ fun ImsXmlLab() {
             )
             val current = documents.getOrNull(selected)
             if (current?.error != null) Text(current.error, color = MaterialTheme.colorScheme.error)
+            val other = documents.getOrNull(comparison)
+            val comparing = documents.size > 1 && comparison != selected && other?.error == null
+            val left = current?.entries.orEmpty().withOccurrenceKeys()
+            val right = if (comparing) other?.entries.orEmpty().withOccurrenceKeys() else emptyMap()
+            val keys = if (comparing) (left.keys + right.keys).distinct() else left.keys.toList()
+            val visible = keys.filter { key ->
+                val before = left[key]
+                val after = right[key]
+                (!comparing || !differencesOnly || before != after) &&
+                    (filter.isBlank() || key.contains(filter, true) ||
+                        before.orEmpty().contains(filter, true) || after.orEmpty().contains(filter, true))
+            }.take(1500)
+            Text("${visible.size} entries shown${if (comparing) " (left vs right)" else ""}")
             LazyColumn {
-                items(current?.entries.orEmpty().filter {
-                    filter.isBlank() || it.path.contains(filter, true) || it.value.contains(filter, true)
-                }.take(1500)) { entry ->
-                    ListItem(headlineContent = { Text(entry.path) }, supportingContent = { Text(entry.value) })
-                    HorizontalDivider()
+                items(visible) { key ->
+                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        Text(key, style = MaterialTheme.typography.labelMedium)
+                        if (comparing) {
+                            Row(Modifier.fillMaxWidth()) {
+                                Text(left[key] ?: "—", Modifier.weight(1f))
+                                Spacer(Modifier.width(8.dp))
+                                Text(right[key] ?: "—", Modifier.weight(1f))
+                            }
+                        } else {
+                            Text(left[key].orEmpty())
+                        }
+                        HorizontalDivider()
+                    }
                 }
             }
         }
@@ -108,5 +169,15 @@ private fun readImsXml(context: android.content.Context, uri: Uri): XmlDocument 
         XmlDocument(name, entries)
     } catch (e: Exception) {
         XmlDocument(name, emptyList(), "Cannot inspect XML: ${e.message}")
+    }
+}
+
+/** Preserve duplicate XML paths by numbering occurrences in document order. */
+private fun List<XmlEntry>.withOccurrenceKeys(): Map<String, String> {
+    val counts = mutableMapOf<String, Int>()
+    return associate { entry ->
+        val n = (counts[entry.path] ?: 0) + 1
+        counts[entry.path] = n
+        "${entry.path} [${n}]" to entry.value
     }
 }
