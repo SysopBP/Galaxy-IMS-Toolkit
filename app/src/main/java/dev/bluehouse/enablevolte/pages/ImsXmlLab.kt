@@ -50,6 +50,8 @@ fun ImsXmlLab() {
     var documents by remember { mutableStateOf<List<XmlDocument>>(emptyList()) }
     var discoveryStatus by remember { mutableStateOf("Scanning device IMS XML files…") }
     var backendStatus by remember { mutableStateOf("Root backend not checked") }
+    var systemBackendStatus by remember { mutableStateOf("TokenX System UID 1000 not checked") }
+    var shizukuBackendStatus by remember { mutableStateOf("Shizuku not checked") }
     var rescan by remember { mutableIntStateOf(0) }
     var filter by remember { mutableStateOf("") }
     var valueType by remember { mutableStateOf("All") }
@@ -72,6 +74,8 @@ fun ImsXmlLab() {
         discoveryStatus = "Scanning protected IMS configuration…"
         val result = withContext(Dispatchers.IO) {
             backendStatus = checkImsRootBackend()
+            systemBackendStatus = checkImsSystemBackend()
+            shizukuBackendStatus = checkImsShizukuBackend()
             runCatching { discoverImsXml() }
         }
         result.onSuccess { found ->
@@ -138,7 +142,11 @@ fun ImsXmlLab() {
         Text("Read-only. Import Samsung imsconfig, imsprofile and imsswitch XML files. Nothing is changed on the device.")
         Spacer(Modifier.height(12.dp))
         Text(discoveryStatus)
+        Text("Backend Manager", style = MaterialTheme.typography.titleMedium)
         Text(backendStatus, style = MaterialTheme.typography.labelMedium)
+        Text(systemBackendStatus, style = MaterialTheme.typography.labelMedium)
+        Text(shizukuBackendStatus, style = MaterialTheme.typography.labelMedium)
+        Text("Identity checks do not grant IMS write permissions.")
         OutlinedButton(onClick = { rescan++ }) { Text("Reload device IMS XML") }
         Button(onClick = { picker.launch(arrayOf("text/xml", "application/xml", "text/*", "*/*")) }) {
             Text("Import XML files")
@@ -548,3 +556,26 @@ private fun validateImsXml(xml: String) {
         event = parser.next()
     }
 }
+
+/** Verify a separately provisioned TokenX UID-1000 route without requesting writes. */
+private fun checkImsSystemBackend(): String = runCatching {
+    val process = ProcessBuilder("sh", "-c", "command -v rish").redirectErrorStream(true).start()
+    val command = process.inputStream.bufferedReader().readText().trim()
+    if (process.waitFor() != 0 || command.isBlank()) {
+        "TokenX System UID 1000: client unavailable (not verified)"
+    } else {
+        "TokenX System UID 1000: client detected; connection not verified"
+    }
+}.getOrElse { "TokenX System UID 1000: unavailable" }
+
+/** Detect installed Shizuku manager; runtime authorization is a separate check. */
+private fun checkImsShizukuBackend(): String = runCatching {
+    val process = ProcessBuilder("sh", "-c", "pm path moe.shizuku.privileged.api")
+        .redirectErrorStream(true).start()
+    val output = process.inputStream.bufferedReader().readText()
+    if (process.waitFor() == 0 && output.contains("package:")) {
+        "Shizuku: manager installed; binder authorization not verified"
+    } else {
+        "Shizuku: manager not detected"
+    }
+}.getOrElse { "Shizuku: detection unavailable" }
