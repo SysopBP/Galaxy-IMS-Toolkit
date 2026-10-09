@@ -25,7 +25,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -58,16 +63,35 @@ fun Home(navController: NavController) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    var shizukuEnabled by rememberSaveable { mutableStateOf(false) }
-    var shizukuGranted by rememberSaveable { mutableStateOf(false) }
-    var subscriptions by rememberSaveable { mutableStateOf(listOf<SubscriptionInfo>()) }
-    var deviceIMSEnabled by rememberSaveable { mutableStateOf(false) }
+    var shizukuEnabled by remember { mutableStateOf(false) }
+    var shizukuGranted by remember { mutableStateOf(false) }
+    var subscriptions by remember { mutableStateOf(listOf<SubscriptionInfo>()) }
+    var deviceIMSEnabled by remember { mutableStateOf(false) }
 
-    var isIMSRegistered by rememberSaveable { mutableStateOf(listOf<Boolean>()) }
-    var newerVersion by rememberSaveable { mutableStateOf("") }
+    var isIMSRegistered by remember { mutableStateOf(listOf<Boolean>()) }
+    var newerVersion by remember { mutableStateOf("") }
+    var permissionMessage by remember { mutableStateOf("") }
+    var showPermissions by remember { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        permissionMessage = if (results.values.all { it }) "Android permissions granted" else "Some permissions denied; review app settings."
+    }
+    fun requestAvailablePermissions() {
+        val missing = listOf(Manifest.permission.READ_PHONE_STATE).filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isNotEmpty()) permissionLauncher.launch(missing.toTypedArray())
+        else permissionMessage = "Android phone-state permission already granted."
+        try {
+            if (checkShizukuPermission(0) == ShizukuStatus.NOT_GRANTED) {
+                Shizuku.requestPermission(7001)
+            }
+        } catch (e: Exception) {
+            permissionMessage = "Shizuku unavailable: " + e.javaClass.simpleName
+        }
+    }
 
     fun loadFlags() {
-        shizukuGranted = true
+        shizukuGranted = checkShizukuPermission(0) == ShizukuStatus.GRANTED
         subscriptions = carrierModer.subscriptions
         deviceIMSEnabled = carrierModer.deviceSupportsIMS
 
@@ -148,6 +172,24 @@ fun Home(navController: NavController) {
                 Text("TokenX UID 1000 is separate from app authorization.", color = Color(0xFFB5BECA), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
         }
+        Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color(0xAA242A35)), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("PERMISSION MANAGER", color = Color(0xFFB7C4DA), fontWeight = FontWeight.SemiBold)
+                Text("Request Android phone-state access and Shizuku authorization. IMS privileges require separate verification.")
+                Button(onClick = { requestAvailablePermissions() }, modifier = Modifier.fillMaxWidth()) { Text("Enable available permissions") }
+                OutlinedButton(onClick = { showPermissions = !showPermissions }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (showPermissions) "Hide permission details" else "View permission details")
+                }
+                if (showPermissions) {
+                    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+                    Text("Phone state: " + if (granted) "Granted" else "Not granted")
+                    Text("Shizuku authorization: " + if (shizukuGranted) "Granted" else "Not granted")
+                    Text("TokenX UID 1000: Not verified")
+                    Text("IMS write permission: Not verified")
+                }
+                if (permissionMessage.isNotBlank()) Text(permissionMessage)
+            }
+        }
         Card(
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xAA242A35)),
@@ -155,7 +197,7 @@ fun Home(navController: NavController) {
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("IMS & SIM", color = Color(0xFFB7C4DA), fontWeight = FontWeight.SemiBold)
-                Text("Active SIMs: ${subscriptions.size}")
+                Text(if (shizukuGranted) "App-visible SIMs: ${subscriptions.size}" else "App-visible SIMs: Unknown (authorization required)")
                 Text("Device IMS: ${if (deviceIMSEnabled) "Supported" else "Not verified"}")
                 subscriptions.forEachIndexed { index, sub ->
                     val registered = isIMSRegistered.getOrNull(index)
