@@ -177,6 +177,8 @@ fun ImsXmlLab() {
         }
     }
     var cscBuilderStatus by remember { mutableStateOf("") }
+    var cscTargetPath by remember { mutableStateOf("") }
+    var cscOverlayConfirmed by remember { mutableStateOf(false) }
     var cscInputName by remember { mutableStateOf("") }
     var cscInputXml by remember { mutableStateOf("") }
     var cscValidation by remember { mutableStateOf("No CSC file selected") }
@@ -297,6 +299,30 @@ fun ImsXmlLab() {
             Text("Baseline CSC SHA-256: $baselineHash")
         }
         Text("Neither CSC file is inserted into the module ZIP.")
+        OutlinedTextField(
+            value = cscTargetPath,
+            onValueChange = { cscTargetPath = it.take(160); cscOverlayConfirmed = false },
+            label = { Text("Proposed CSC target path (preview only)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+        val cscPathValid = cscTargetPath.startsWith("/system/") &&
+            !cscTargetPath.contains("..") &&
+            cscTargetPath.endsWith(".xml") &&
+            cscTargetPath.none { it == '\\u0000' || it == '\\n' || it == '\\r' }
+        Text(if (cscPathValid) "Target format valid (not device-verified)" else
+            "Enter an absolute /system/...xml path without traversal.")
+        Checkbox(
+            checked = cscOverlayConfirmed,
+            onCheckedChange = { cscOverlayConfirmed = it },
+            enabled = cscPathValid && cscInputXml.isNotEmpty(),
+        )
+        Text("I understand this path is not verified against device firmware.")
+        Text(if (cscOverlayConfirmed && cscPathValid) {
+            "Overlay planning confirmed. Export remains an inactive ZIP template."
+        } else {
+            "Overlay planning locked until path validation and acknowledgement."
+        })
         OutlinedButton(onClick = {
             cscPicker.launch(arrayOf("text/xml", "application/xml", "*/*"))
         }) { Text("Select and validate CSC XML") }
