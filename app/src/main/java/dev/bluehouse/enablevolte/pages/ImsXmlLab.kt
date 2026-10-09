@@ -61,6 +61,8 @@ fun ImsXmlLab() {
     var editMode by remember { mutableStateOf(false) }
     var editorMessage by remember { mutableStateOf("") }
     var exportXml by remember { mutableStateOf("") }
+    var snapshotXml by remember { mutableStateOf("") }
+    var snapshotStatus by remember { mutableStateOf("") }
     var previewChanges by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var previewMessage by remember { mutableStateOf("") }
     var showDraftDiff by remember { mutableStateOf(false) }
@@ -101,6 +103,24 @@ fun ImsXmlLab() {
             }
         }
     }
+    val snapshotExporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/xml"),
+    ) { uri ->
+        if (uri != null) {
+            snapshotStatus = try {
+                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                    stream.write(snapshotXml.toByteArray(Charsets.UTF_8))
+                } ?: error("Unable to open backup destination")
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(snapshotXml.toByteArray(Charsets.UTF_8))
+                    .joinToString("") { "%02x".format(it) }
+                "Original XML snapshot saved. SHA-256: $digest"
+            } catch (e: Exception) {
+                "Snapshot failed: ${e.message}"
+            }
+        }
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         documents = uris.take(12).map { uri -> readImsXml(context, uri) }
         selected = 0
@@ -123,6 +143,19 @@ fun ImsXmlLab() {
             Text("Select up to 12 XML files from your device. Files remain local.")
         } else {
             Text("${documents.size} files imported")
+            OutlinedButton(onClick = {
+                val document = documents.getOrNull(selected)
+                if (document == null || document.error != null || document.originalXml.isBlank()) {
+                    snapshotStatus = "Select a valid XML file to back up."
+                } else {
+                    snapshotXml = document.originalXml
+                    val timestamp = java.text.SimpleDateFormat(
+                        "yyyyMMdd_HHmmss", java.util.Locale.US,
+                    ).format(java.util.Date())
+                    snapshotExporter.launch("IMS_original_${timestamp}_${document.name}")
+                }
+            }) { Text("Back up selected original XML") }
+            if (snapshotStatus.isNotEmpty()) Text(snapshotStatus)
             documents.forEachIndexed { index, document ->
                 TextButton(onClick = { selected = index; draftXml = document.originalXml; editMode = false; editorMessage = ""; previewChanges = emptyMap() }) {
                     Text("${if (selected == index) "● " else ""}${document.name} (${document.entries.size} entries)")
