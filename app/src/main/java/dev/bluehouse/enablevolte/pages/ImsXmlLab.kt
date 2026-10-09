@@ -280,7 +280,8 @@ fun ImsXmlLab() {
                             "Status: INACTIVE; candidate and baseline are reference-only\\n"
                         val safeFiles = files + mapOf(
                             "service.sh" to "#!/system/bin/sh\\n# Inactive by design; no mounts or service restarts.\\nexit 0\\n",
-                            "customize.sh" to "#!/system/bin/sh\\nui_print '- Inactive CSC reference module; no overlay files installed'\\n",
+                            "customize.sh" to ("#!/system/bin/sh\\n" +
+                                "ui_print '- Inactive CSC reference module'\\n"),
                             "audit.txt" to audit,
                             "reference/candidate.xml" to cscInputXml,
                             "reference/baseline.xml" to cscBaselineXml
