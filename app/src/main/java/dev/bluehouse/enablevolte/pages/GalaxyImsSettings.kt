@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -170,6 +171,8 @@ fun GalaxyImsSettings() {
     var loading by remember { mutableStateOf(true) }
     var refresh by remember { mutableStateOf(0) }
     var exportStatus by remember { mutableStateOf("") }
+    var showAdvanced by remember { mutableStateOf(false) }
+    var lastUpdated by remember { mutableStateOf("Not yet refreshed") }
     LaunchedEffect(refresh) {
         loading = true
         diagnostic = withContext(Dispatchers.IO) {
@@ -177,52 +180,67 @@ fun GalaxyImsSettings() {
                 DiagnosticResult("Diagnostic error: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(250)}", "Diagnostic failed: ${e.stackTraceToString().take(3000)}")
             }
         }
+        lastUpdated = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
         loading = false
     }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Samsung IMS — Diagnostics v3 (read-only)")
-        Text("IMS registration and availability do not prove carrier provisioning.")
-        Text("Live IMS dashboard • refresh to update both SIMs")
+        Text("SAMSUNG IMS · READ-ONLY", style = androidx.compose.material3.MaterialTheme.typography.labelMedium, color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
+        Text("Live IMS dashboard", style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
+        Text("Updated: $lastUpdated • Refresh to collect new readings", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
         val snapshot = diagnostic?.text.orEmpty()
-        val modemCount = Regex("Active modem count=([0-9]+)")
-            .find(snapshot)?.groupValues?.getOrNull(1) ?: "Unknown"
-        val slotStates = (0..1).map { slot ->
-            val simState = Regex("mSimState\\[$slot\\]=([^\\n]+)")
-                .find(snapshot)?.groupValues?.getOrNull(1) ?: "Unknown"
-            "SIM ${slot + 1}: $simState"
-        }
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            colors = androidx.compose.material3.CardDefaults.cardColors(
-                containerColor = Color(0x88303740),
-            ),
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Text("Active modems: $modemCount")
-                slotStates.forEach { Text(it) }
-                Text("VoLTE / VoWiFi / RCS: see registration details below; unknown unless verified")
-                Text("TokenX write permissions: unverified • no carrier changes made")
+        val modemCount = Regex("Active modem count=([0-9]+)").find(snapshot)?.groupValues?.getOrNull(1) ?: "Unknown"
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFF22252D))) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("SIM overview · $modemCount active modems", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    (0..1).forEach { slot ->
+                        val state = Regex("mSimState\\[$slot\\]=([^\\n]+)").find(snapshot)?.groupValues?.getOrNull(1)?.trim() ?: "Unknown"
+                        val subId = Regex("Logical SIM slot $slot: subId=([0-9]+)").find(snapshot)?.groupValues?.getOrNull(1) ?: "?"
+                        Card(modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp), colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFF333744))) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text("SIM ${slot + 1}", style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
+                                Text(state, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+                                Text("Slot $slot · subId $subId", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+                Text("SIM loaded does not mean IMS registered.", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
             }
         }
-
-        val sections = diagnostic?.text.orEmpty().split(
-            Regex("(?=App API subscriptions:|Root:|Privileged SIM inventory|IMS registration \\(source:)"),
-        ).filter { it.isNotBlank() }
-        if (sections.isEmpty()) Text("Collecting IMS diagnostics…")
-        sections.forEach { section ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
-                colors = androidx.compose.material3.CardDefaults.cardColors(
-                    containerColor = Color(0x88303740),
-                ),
-            ) {
-                Text(section.trim(), modifier = Modifier.padding(16.dp))
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("IMS services", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                listOf("VoLTE" to "Voice over LTE", "VoWiFi" to "Wi-Fi calling", "RCS" to "Rich communication services").forEach { (service, description) ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column { Text(service); Text(description, style = androidx.compose.material3.MaterialTheme.typography.labelSmall) }
+                        Text("Unverified", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Text("Capability and registration details are available in Advanced diagnostics.", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+            }
+        }
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Backend manager", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                val root = Regex("Root: ([^\\n]+)").find(snapshot)?.groupValues?.getOrNull(1)?.trim() ?: "Not checked"
+                val shizuku = Regex("Shizuku binder: ([^\\n]+)").find(snapshot)?.groupValues?.getOrNull(1)?.trim() ?: "Not checked"
+                val route = Regex("Privilege route: ([^\\n]+)").find(snapshot)?.groupValues?.getOrNull(1)?.trim() ?: "Not verified"
+                Text("Root · $root")
+                Text("Shizuku · $shizuku")
+                Text("TokenX / privilege route · $route", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                Text("Backend identity does not establish IMS write permission.", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+            }
+        }
+        OutlinedButton(onClick = { showAdvanced = !showAdvanced }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (showAdvanced) "Hide advanced diagnostics" else "Show advanced diagnostics")
+        }
+        if (showAdvanced) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                Text(snapshot.ifBlank { "Collecting diagnostics…" }, modifier = Modifier.padding(16.dp), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
         }
         if (loading) CircularProgressIndicator()
