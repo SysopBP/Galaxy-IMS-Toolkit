@@ -80,7 +80,7 @@ fun ImsXmlLab() {
     var previewMessage by remember { mutableStateOf("") }
     var showDraftDiff by remember { mutableStateOf(false) }
     LaunchedEffect(rescan) {
-        discoveryStatus = "Scanning protected IMS configuration…"
+        discoveryStatus = "Scanning protected IMS and CSC XML…"
         val result = withContext(Dispatchers.IO) {
             backendStatus = checkImsRootBackend()
             systemBackendStatus = checkImsSystemBackend()
@@ -96,9 +96,9 @@ fun ImsXmlLab() {
                 previewChanges = emptyMap()
             }
             discoveryStatus = if (found.isEmpty()) {
-                "No accessible IMS XML found. You can import files manually."
+                "No accessible IMS or CSC XML found. You can import files manually."
             } else {
-                "${found.size} IMS XML files loaded from device (read-only)."
+                "${found.size} IMS/CSC XML copies loaded from device (read-only)."
             }
         }.onFailure {
             discoveryStatus = "Automatic scan unavailable: ${it.javaClass.simpleName}."
@@ -351,7 +351,7 @@ fun ImsXmlLab() {
             cscExporter.launch("Galaxy_IMS_CSC_Draft.zip")
         }) { Text("Export CSC module draft ZIP") }
         if (cscBuilderStatus.isNotEmpty()) Text(cscBuilderStatus)
-        OutlinedButton(onClick = { rescan++ }) { Text("Reload device IMS XML") }
+        OutlinedButton(onClick = { rescan++ }) { Text("Reload device IMS + CSC XML") }
         Button(onClick = { picker.launch(arrayOf("text/xml", "application/xml", "text/*", "*/*")) }) {
             Text("Import XML files")
         }
@@ -688,20 +688,28 @@ private fun discoverImsXml(): List<XmlDocument> {
         "/data/user_de/0/com.sec.imsservice/shared_prefs",
         "/data/user/0/com.sec.imsservice/shared_prefs",
         "/data/data/com.sec.imsservice/shared_prefs",
+        "/system/csc",
+        "/system/omc",
+        "/product/omc",
+        "/optics/configs/carriers",
+        "/prism/etc",
     )
     val found = mutableListOf<XmlDocument>()
     val seen = mutableSetOf<String>()
+    val safePath = Regex("^/[a-zA-Z0-9_./-]+[.]xml$")
     for (directory in directories) {
-        val command = "ls -1 $directory/imsconfig_*.xml " +
-            "$directory/imsprofile_*.xml $directory/imsswitch_*.xml 2>/dev/null"
+        val command = "find $directory -maxdepth 4 -type f -name '*.xml' 2>/dev/null | head -80"
         val listing = ProcessBuilder("su", "-c", command)
             .redirectErrorStream(true).start()
         val paths = listing.inputStream.bufferedReader().readLines()
         listing.waitFor()
         for (path in paths) {
+            if (!safePath.matches(path) || !seen.add(path)) continue
             val name = path.substringAfterLast('/')
-            if (!Regex("^(imsconfig|imsprofile|imsswitch)_[0-9]+\\.xml$").matches(name)) continue
-            if (!seen.add(name)) continue
+            val relevant = name.startsWith("ims", ignoreCase = true) ||
+                directory.contains("csc") || directory.contains("omc") ||
+                directory.contains("optics") || directory.contains("prism")
+            if (!relevant) continue
             val document = runCatching {
                 val proc = ProcessBuilder("su", "-c", "base64 $path")
                     .redirectErrorStream(true).start()
@@ -709,12 +717,12 @@ private fun discoverImsXml(): List<XmlDocument> {
                 require(proc.waitFor() == 0) { "Root read denied" }
                 val bytes = Base64.decode(encoded, Base64.DEFAULT)
                 require(bytes.size <= 2 * 1024 * 1024) { "XML exceeds inspection limit" }
-                parseImsXml(name, bytes)
+                parseImsXml(path, bytes)
             }.getOrElse {
-                XmlDocument(name, emptyList(), "Read failed: ${it.javaClass.simpleName}")
+                XmlDocument(path, emptyList(), "Read failed: " + it.javaClass.simpleName)
             }
             found.add(document)
-            if (found.size >= 12) return found
+            if (found.size >= 60) return found
         }
     }
     return found
