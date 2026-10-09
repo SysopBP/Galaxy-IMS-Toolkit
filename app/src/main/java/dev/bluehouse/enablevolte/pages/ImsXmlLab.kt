@@ -177,6 +177,31 @@ fun ImsXmlLab() {
         }
     }
     var cscBuilderStatus by remember { mutableStateOf("") }
+    var cscInputName by remember { mutableStateOf("") }
+    var cscInputXml by remember { mutableStateOf("") }
+    var cscValidation by remember { mutableStateOf("No CSC file selected") }
+    val cscPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            cscValidation = try {
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: error("Cannot open CSC file")
+                require(bytes.size <= 2 * 1024 * 1024) { "CSC file exceeds 2 MB" }
+                val xml = bytes.toString(Charsets.UTF_8)
+                val parser = Xml.newPullParser()
+                parser.setInput(java.io.StringReader(xml))
+                while (parser.next() != XmlPullParser.END_DOCUMENT) { }
+                cscInputName = uri.lastPathSegment.orEmpty().take(100)
+                cscInputXml = xml
+                "CSC XML valid (${bytes.size} bytes). Preview only; not included in module."
+            } catch (e: Exception) {
+                cscInputXml = ""
+                cscInputName = ""
+                "CSC validation failed: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(120)}"
+            }
+        }
+    }
     val cscExporter = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri ->
@@ -233,6 +258,14 @@ fun ImsXmlLab() {
         Text("Identity checks do not grant IMS write permissions.")
         Text("CSC Module Builder — safe draft", style = MaterialTheme.typography.titleMedium)
         Text("Generate an inactive KernelSU module template. No CSC overlay or carrier changes.")
+        OutlinedButton(onClick = {
+            cscPicker.launch(arrayOf("text/xml", "application/xml", "*/*"))
+        }) { Text("Select and validate CSC XML") }
+        Text(cscValidation)
+        if (cscInputXml.isNotEmpty()) {
+            Text("Selected: $cscInputName")
+            Text("XML preview: ${cscInputXml.take(500)}")
+        }
         OutlinedButton(onClick = {
             cscExporter.launch("Galaxy_IMS_CSC_Draft.zip")
         }) { Text("Export CSC module draft ZIP") }
