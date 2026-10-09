@@ -51,6 +51,7 @@ import dev.bluehouse.enablevolte.pages.Config
 import dev.bluehouse.enablevolte.pages.DumpedConfig
 import dev.bluehouse.enablevolte.pages.Editor
 import dev.bluehouse.enablevolte.pages.Home
+import dev.bluehouse.enablevolte.pages.SamsungImsProfiles
 import dev.bluehouse.enablevolte.ui.theme.EnableVoLTETheme
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 import rikka.shizuku.Shizuku
@@ -118,6 +119,9 @@ fun PixelIMSApp() {
                 navigation(startDestination = "config${subscription.subscriptionId}", route = "config${subscription.subscriptionId}root") {
                     composable("config${subscription.subscriptionId}", context.resources.getString(R.string.sim_config)) {
                         Config(navController, subscription.subscriptionId)
+                    }
+                    composable("config${subscription.subscriptionId}/imsprofiles", "Samsung IMS Profiles") {
+                        SamsungImsProfiles(subscription.simSlotIndex)
                     }
                     composable("config${subscription.subscriptionId}/dump", context.resources.getString(R.string.config_dump_viewer)) {
                         DumpedConfig(context, subscription.subscriptionId)
