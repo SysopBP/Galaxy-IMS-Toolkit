@@ -24,19 +24,28 @@ enum class ShizukuStatus {
     STOPPED,
 }
 
-fun checkShizukuPermission(code: Int): ShizukuStatus =
-    if (Shizuku.getBinder() != null) {
-        if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-            ShizukuStatus.GRANTED
-        } else {
-            if (!Shizuku.shouldShowRequestPermissionRationale()) {
-                Shizuku.requestPermission(0)
-            }
-            ShizukuStatus.NOT_GRANTED
+/**
+ * Carrier configuration requires a live, authorized System UID 1000 Shizuku
+ * endpoint. A root (UID 0) endpoint is not equivalent to the System route.
+ * This checks the binder serving THIS app, not a separate TokenX shell session.
+ */
+fun checkShizukuPermission(code: Int): ShizukuStatus {
+    val binder = Shizuku.getBinder() ?: return ShizukuStatus.STOPPED
+    if (!binder.pingBinder()) return ShizukuStatus.STOPPED
+
+    if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+        if (!Shizuku.shouldShowRequestPermissionRationale()) {
+            Shizuku.requestPermission(code)
         }
-    } else {
-        ShizukuStatus.STOPPED
+        return ShizukuStatus.NOT_GRANTED
     }
+
+    return if (Shizuku.getUid() == android.os.Process.SYSTEM_UID) {
+        ShizukuStatus.GRANTED
+    } else {
+        ShizukuStatus.NOT_GRANTED
+    }
+}
 
 val SubscriptionInfo.uniqueName: String
     get() = "${this.displayName} (SIM ${this.simSlotIndex + 1})"
