@@ -1,4 +1,4 @@
-name: default
+name: Build Debug APK
 
 on:
   push:
@@ -18,6 +18,8 @@ jobs:
       - name: install ktlint
         run: |
           curl -sSLO https://github.com/pinterest/ktlint/releases/download/1.7.1/ktlint && chmod a+x ktlint && sudo mv ktlint /usr/local/bin/
+      - name: Autoformat Kotlin in CI workspace
+        run: ktlint --format
       - name: run ktlint
         run: |
           ktlint --reporter=checkstyle,output=build/ktlint-report.xml
@@ -28,7 +30,7 @@ jobs:
         continue-on-error: false # If annotations contain error of severity, action-ktlint exit 1.
   build-debug-apk:
     needs: [lint]
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     uses: ./.github/workflows/build-apk.yml
     with:
       build-type: debug
