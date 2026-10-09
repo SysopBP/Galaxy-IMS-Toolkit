@@ -3,6 +3,7 @@ package dev.bluehouse.enablevolte.components
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,8 +38,13 @@ fun ClickablePropertyView(
         return
     }
     if (onClick != null) {
-        Surface(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)) {
+        Surface(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
                 Text(text = label, modifier = Modifier.padding(bottom = 4.dp), fontSize = labelFontSize, fontFamily = labelFontFamily)
                 Text(text = value, color = MaterialTheme.colorScheme.outline, fontSize = valueFontSize, fontFamily = valueFontFamily)
             }
