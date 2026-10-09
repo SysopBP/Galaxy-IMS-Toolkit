@@ -177,7 +177,8 @@ fun GalaxyImsSettings() {
         loading = true
         diagnostic = withContext(Dispatchers.IO) {
             try { inspectIms(context.applicationContext) } catch (e: Exception) {
-                DiagnosticResult("Diagnostic error: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(250)}", "Diagnostic failed: ${e.stackTraceToString().take(3000)}")
+                DiagnosticResult("Diagnostic error: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(250)}",
+                    "Diagnostic failed: ${e.stackTraceToString().take(3000)}")
             }
         }
         lastUpdated = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
@@ -187,19 +188,23 @@ fun GalaxyImsSettings() {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("SAMSUNG IMS · READ-ONLY", style = androidx.compose.material3.MaterialTheme.typography.labelMedium, color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
+        Text("SAMSUNG IMS · READ-ONLY", style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+            color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
         Text("Live IMS dashboard", style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
-        Text("Updated: $lastUpdated • Refresh to collect new readings", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+        Text("Updated: $lastUpdated • Refresh to collect new readings",
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
         val snapshot = diagnostic?.text.orEmpty()
         val modemCount = Regex("Active modem count=([0-9]+)").find(snapshot)?.groupValues?.getOrNull(1) ?: "Unknown"
-        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFF22252D))) {
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFF22252D))) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("SIM overview · $modemCount active modems", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     (0..1).forEach { slot ->
                         val state = Regex("mSimState\\[$slot\\]=([^\\n]+)").find(snapshot)?.groupValues?.getOrNull(1)?.trim() ?: "Unknown"
                         val subId = Regex("Logical SIM slot $slot: subId=([0-9]+)").find(snapshot)?.groupValues?.getOrNull(1) ?: "?"
-                        Card(modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp), colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFF333744))) {
+                        Card(modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp),
+                            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFF333744))) {
                             Column(Modifier.padding(12.dp)) {
                                 Text("SIM ${slot + 1}", style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
                                 Text(state, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
@@ -214,13 +219,16 @@ fun GalaxyImsSettings() {
         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("IMS services", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-                listOf("VoLTE" to "Voice over LTE", "VoWiFi" to "Wi-Fi calling", "RCS" to "Rich communication services").forEach { (service, description) ->
+                listOf("VoLTE" to "Voice over LTE", "VoWiFi" to "Wi-Fi calling",
+                    "RCS" to "Rich communication services").forEach { (service, description) ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column { Text(service); Text(description, style = androidx.compose.material3.MaterialTheme.typography.labelSmall) }
-                        Text("Unverified", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                        Text("Unverified", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
                     }
                 }
-                Text("Capability and registration details are available in Advanced diagnostics.", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                Text("Capability and registration details are available in Advanced diagnostics.",
+                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
             }
         }
         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
@@ -232,7 +240,8 @@ fun GalaxyImsSettings() {
                 Text("Root · $root")
                 Text("Shizuku · $shizuku")
                 Text("TokenX / privilege route · $route", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
-                Text("Backend identity does not establish IMS write permission.", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                Text("Backend identity does not establish IMS write permission.",
+                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
             }
         }
         OutlinedButton(onClick = { showAdvanced = !showAdvanced }, modifier = Modifier.fillMaxWidth()) {
@@ -240,7 +249,8 @@ fun GalaxyImsSettings() {
         }
         if (showAdvanced) {
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
-                Text(snapshot.ifBlank { "Collecting diagnostics…" }, modifier = Modifier.padding(16.dp), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                Text(snapshot.ifBlank { "Collecting diagnostics…" }, modifier = Modifier.padding(16.dp),
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
         }
         if (loading) CircularProgressIndicator()
