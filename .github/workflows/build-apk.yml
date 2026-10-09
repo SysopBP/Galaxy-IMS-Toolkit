@@ -42,9 +42,10 @@ jobs:
           packages: ""
       - name: Install required platform
         run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
-      - name: Replace android.jar
+      - name: Verify Android platform archive
         run: |
-          curl -L https://github.com/Reginer/aosp-android-jar/raw/main/android-36/android.jar > /usr/local/lib/android/sdk/platforms/android-36/android.jar
+          test -s "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+          unzip -t "$ANDROID_SDK_ROOT/platforms/android-36/android.jar" >/dev/null
       - name: Build APK
         id: build_apk
         run: |
