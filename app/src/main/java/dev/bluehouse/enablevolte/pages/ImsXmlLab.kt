@@ -684,7 +684,9 @@ fun ImsXmlLab() {
                         before.orEmpty().contains(filter, true) || after.orEmpty().contains(filter, true))
             }.take(1500)
             Text("${visible.size} entries shown${if (comparing) " (left vs right)" else ""}")
-            LazyColumn {
+            // A lazy list nested inside the vertically scrolling XML Lab must have a
+            // finite height; otherwise Compose throws an infinite-height constraint exception.
+            LazyColumn(modifier = Modifier.fillMaxWidth().height(420.dp)) {
                 items(visible) { key ->
                     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                         Text(key, style = MaterialTheme.typography.labelMedium)
