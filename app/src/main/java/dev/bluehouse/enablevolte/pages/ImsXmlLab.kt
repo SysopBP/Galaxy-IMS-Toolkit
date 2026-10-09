@@ -63,6 +63,7 @@ fun ImsXmlLab() {
     var exportXml by remember { mutableStateOf("") }
     var previewChanges by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var previewMessage by remember { mutableStateOf("") }
+    var showDraftDiff by remember { mutableStateOf(false) }
     LaunchedEffect(rescan) {
         discoveryStatus = "Scanning protected IMS configuration…"
         val result = withContext(Dispatchers.IO) {
@@ -200,6 +201,30 @@ fun ImsXmlLab() {
                     editorMessage = "Draft restored from the imported original. Live IMS settings unchanged."
                 }) { Text("Restore original draft") }
                 if (editorMessage.isNotEmpty()) Text(editorMessage)
+                OutlinedButton(onClick = { showDraftDiff = !showDraftDiff }) {
+                    Text(if (showDraftDiff) "Hide draft comparison" else "Compare original vs draft")
+                }
+                if (showDraftDiff) {
+                    val source = documents.getOrNull(selected)
+                    val draft = parseImsXml("draft", draftXml.toByteArray(Charsets.UTF_8))
+                    if (draft.error != null) {
+                        Text("Draft is invalid: ${draft.error}", color = MaterialTheme.colorScheme.error)
+                    } else {
+                        val originalEntries = source?.entries.orEmpty().withOccurrenceKeys()
+                        val draftEntries = draft.entries.withOccurrenceKeys()
+                        val changedKeys = (originalEntries.keys + draftEntries.keys).distinct().filter { key ->
+                            originalEntries[key] != draftEntries[key]
+                        }
+                        Text("${changedKeys.size} changed entries compared with original")
+                        changedKeys.take(100).forEach { key ->
+                            Text(key, style = MaterialTheme.typography.labelMedium)
+                            Text("Original: ${originalEntries[key] ?: "—"}")
+                            Text("Draft: ${draftEntries[key] ?: "—"}")
+                            HorizontalDivider()
+                        }
+                        if (changedKeys.size > 100) Text("Showing first 100 differences")
+                    }
+                }
             }
             if (showResetConfirmation) {
                 AlertDialog(
