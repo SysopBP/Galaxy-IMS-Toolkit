@@ -14,6 +14,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -160,7 +163,12 @@ fun GalaxyImsSettings() {
     ) {
         Text("Samsung IMS — Diagnostics v2 (read-only)")
         Text("IMS registration and availability do not prove carrier provisioning.")
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0x88303740)),
+        ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(diagnostic?.text ?: "Collecting IMS diagnostics…")
             }
