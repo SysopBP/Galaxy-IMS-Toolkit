@@ -77,7 +77,7 @@ private fun inspectIms(context: Context): DiagnosticResult {
     val subscriptions = context.getSystemService(SubscriptionManager::class.java)
     try {
         val ids = subscriptions?.activeSubscriptionInfoList.orEmpty()
-        status.appendLine("App-visible active subscriptions: ${ids.size}")
+        status.appendLine("App API subscriptions: ${ids.size} (may be permission-filtered)")
         ids.forEach { sub ->
             status.appendLine("SIM slot ${sub.simSlotIndex + 1}: subscription ${sub.subscriptionId}")
             try {
@@ -127,7 +127,7 @@ private fun inspectIms(context: Context): DiagnosticResult {
         val subSummary = try { privilegedSubscriptionSummary() } catch (e: Exception) {
             "Subscription service query failed: ${e.javaClass.simpleName}"
         }
-        status.appendLine("Android subscription service (privileged):")
+        status.appendLine("Privileged SIM inventory (source: dumpsys isub):")
         status.appendLine(subSummary)
         report.appendLine("Privileged subscription summary:\n$subSummary")
         val secims = try { samsungRegistrationSummary() } catch (e: Exception) {
@@ -136,9 +136,9 @@ private fun inspectIms(context: Context): DiagnosticResult {
         val registrations = secims.lines().filter {
             it.contains("SIM slot: [") && it.contains("state: [")
         }
-        status.appendLine("Samsung IMS registration (per profile):")
+        status.appendLine("IMS registration (source: Samsung secims):")
         if (registrations.isEmpty()) {
-            status.appendLine("No registration records returned; service output may be restricted.")
+            status.appendLine("Registration unknown: no parseable profile records returned; not proof of disconnection.")
         } else {
             registrations.forEach { line ->
                 // Only report the profile identity and state, not SIP addresses or IPs.
@@ -183,16 +183,22 @@ fun GalaxyImsSettings() {
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Samsung IMS — Diagnostics v2 (read-only)")
+        Text("Samsung IMS — Diagnostics v3 (read-only)")
         Text("IMS registration and availability do not prove carrier provisioning.")
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
-            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0x88303740)),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(diagnostic?.text ?: "Collecting IMS diagnostics…")
+        val sections = diagnostic?.text.orEmpty().split(
+            Regex("(?=App API subscriptions:|Root:|Privileged SIM inventory|IMS registration \\(source:)"),
+        ).filter { it.isNotBlank() }
+        if (sections.isEmpty()) Text("Collecting IMS diagnostics…")
+        sections.forEach { section ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = Color(0x88303740),
+                ),
+            ) {
+                Text(section.trim(), modifier = Modifier.padding(16.dp))
             }
         }
         if (loading) CircularProgressIndicator()
