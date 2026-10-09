@@ -211,7 +211,7 @@ fun PixelIMSApp() {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Theme")
-                    listOf("oneui" to "One UI", "miuix" to "MIUIX inspired").forEach { (value, label) ->
+                    listOf("oneui" to "One UI", "miuix" to "MIUIX inspired", "glass" to "Glass").forEach { (value, label) ->
                         TextButton(onClick = {
                             themeMode = value
                             appearancePrefs.edit().putString("theme", value).apply()
@@ -269,7 +269,7 @@ fun PixelIMSApp() {
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = if (themeMode == "glass") Color(0x88434B60) else MaterialTheme.colorScheme.primary),
             )
         },
         bottomBar = {
@@ -277,7 +277,12 @@ fun PixelIMSApp() {
                 Surface(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
                     shape = RoundedCornerShape(if (themeMode == "miuix") 36.dp else 30.dp),
-                    color = if (themeMode == "miuix") Color(0xA8323444) else Color(0xB8222229),
+                    color = when (themeMode) {
+                        "glass" -> Color(0x66434B60)
+                        "miuix" -> Color(0xA8323444)
+                        else -> Color(0xB8222229)
+                    },
+                    border = if (themeMode == "glass") androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.23f)) else null,
                     tonalElevation = 8.dp,
                     shadowElevation = 12.dp,
                 ) {
@@ -306,7 +311,11 @@ fun PixelIMSApp() {
                                 selectedTextColor = Color.White,
                                 unselectedIconColor = Color(0xFFB8B8BF),
                                 unselectedTextColor = Color(0xFFB8B8BF),
-                                indicatorColor = if (themeMode == "miuix") Color(0x996E8DFF) else Color(0x885A5A65),
+                                indicatorColor = when (themeMode) {
+                                    "glass" -> Color(0x668FA7CF)
+                                    "miuix" -> Color(0x996E8DFF)
+                                    else -> Color(0x885A5A65)
+                                },
                             ),
                             onClick = {
                                 navController.navigate(screen.route) {
