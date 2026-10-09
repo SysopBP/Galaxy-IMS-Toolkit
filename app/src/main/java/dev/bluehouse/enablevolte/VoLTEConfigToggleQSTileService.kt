@@ -2,6 +2,7 @@ package dev.bluehouse.enablevolte
 
 import android.os.Build
 import android.service.quicksettings.Tile
+import android.util.Log
 import android.service.quicksettings.TileService
 import android.telephony.CarrierConfigManager
 import org.lsposed.hiddenapibypass.HiddenApiBypass
@@ -83,8 +84,20 @@ open class VoLTEConfigToggleQSTileService(
     private fun toggleVoLTEStatus() {
         val moder = this.moder ?: return
         val volteEnabled = this.volteEnabled ?: return
-        moder.updateCarrierConfig(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL, !volteEnabled)
-        moder.restartIMSRegistration()
+        try {
+            moder.updateCarrierConfig(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL, !volteEnabled)
+            moder.restartIMSRegistration()
+        } catch (e: SecurityException) {
+            Log.e(TAG, "System permission denied for IMS tile", e)
+            qsTile.state = Tile.STATE_UNAVAILABLE
+            qsTile.updateTile()
+            return
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "IMS tile update unavailable", e)
+            qsTile.state = Tile.STATE_UNAVAILABLE
+            qsTile.updateTile()
+            return
+        }
         qsTile.state = if (volteEnabled) Tile.STATE_INACTIVE else Tile.STATE_ACTIVE
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             qsTile.subtitle = getString(if (volteEnabled) R.string.disabled else R.string.enabled)
