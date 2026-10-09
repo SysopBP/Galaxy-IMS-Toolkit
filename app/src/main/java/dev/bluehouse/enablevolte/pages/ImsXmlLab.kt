@@ -490,7 +490,13 @@ fun ImsXmlLab() {
 
             if (backupHashVerified) Text("Backup checksum verified against selected file.")
             documents.forEachIndexed { index, document ->
-                TextButton(onClick = { selected = index; draftXml = document.originalXml; editMode = false; editorMessage = ""; previewChanges = emptyMap() }) {
+                TextButton(onClick = {
+                    selected = index
+                    draftXml = document.originalXml
+                    editMode = false
+                    editorMessage = ""
+                    previewChanges = emptyMap()
+                }) {
                     Text("${if (selected == index) "● " else ""}${document.name} (${document.entries.size} entries)")
                 }
             }
