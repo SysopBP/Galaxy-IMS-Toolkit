@@ -54,7 +54,8 @@ jobs:
             echo "upload_filename=${RUN_ID}-APK" >> $GITHUB_OUTPUT
             echo "build_filename=app-release-unsigned.apk" >> $GITHUB_OUTPUT
           else
-            ./gradlew assemble
+            ./gradlew assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk dev.bluehouse.enablevolte.apk
             echo "upload_filename=${RUN_ID}.debug.apk" >> $GITHUB_OUTPUT
             echo "build_filename=app-debug.apk" >> $GITHUB_OUTPUT
           fi
@@ -62,11 +63,13 @@ jobs:
           BUILD_TYPE: ${{ inputs.build-type }}
           RUN_ID: ${{ github.run_id }}
       - name: align APK with zipalign
+        if: ${{ inputs.build-type == 'release' }}
         run: $ANDROID_SDK_ROOT/build-tools/34.0.0/zipalign -v -p 4 app/build/outputs/apk/${BUILD_TYPE}/${FILENAME} app-unsigned-aligned.apk
         env:
           BUILD_TYPE: ${{ inputs.build-type }}
           FILENAME: ${{ steps.build_apk.outputs.build_filename }}
       - name: Save keystore as file
+        if: ${{ inputs.build-type == 'release' }}
         run: echo "${KEYSTORE_B64}" | base64 -d > keystore.jks
         env:
           KEYSTORE_B64: ${{ secrets.keystore }}
@@ -76,12 +79,12 @@ jobs:
           KEY_ALIAS: ${{ secrets.key-alias }}
           KEY_PASSWORD: ${{ secrets.key-password }}
           BUILD_TYPE: ${{ inputs.build-type }}
-        if: ${{ env.KEY_PASSWORD != '' }}
+        if: ${{ inputs.build-type == 'release' && env.KEY_PASSWORD != '' }}
       - name: Rename APK
         run: mv app-unsigned-aligned.apk dev.bluehouse.enablevolte.apk
         env:
           KEY_PASSWORD: ${{ secrets.key-password }}
-        if: ${{ env.KEY_PASSWORD == '' }}
+        if: ${{ inputs.build-type == 'release' && env.KEY_PASSWORD == '' }}
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
