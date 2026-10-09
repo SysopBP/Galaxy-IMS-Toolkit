@@ -432,11 +432,7 @@ fun ImsXmlLab() {
         val cscPathValid = cscTargetPath.startsWith("/system/") &&
             !cscTargetPath.contains("..") &&
             cscTargetPath.endsWith(".xml") &&
-            cscTargetPath.none { character ->
-                character == '\u0000' ||
-                    character == '\n' ||
-                    character == '\r'
-            }
+            cscTargetPath.none { it.code == 0 || it.code == 10 || it.code == 13 }
         Text(if (cscPathValid) "Target format valid (not device-verified)" else
             "Enter an absolute /system/...xml path without traversal.")
         Checkbox(
