@@ -37,7 +37,7 @@ import org.xmlpull.v1.XmlPullParser
 import java.io.ByteArrayInputStream
 
 private data class XmlEntry(val path: String, val value: String)
-private data class XmlDocument(val name: String, val entries: List<XmlEntry>, val error: String? = null)
+private data class XmlDocument(val name: String, val entries: List<XmlEntry>, val error: String? = null, val originalXml: String = "")
 
 /** Read-only, locally imported IMS XML inspection. Never writes telephony or IMS state. */
 @Composable
@@ -49,10 +49,30 @@ fun ImsXmlLab() {
     var comparison by remember { mutableIntStateOf(0) }
     var differencesOnly by remember { mutableStateOf(true) }
     var showResetConfirmation by remember { mutableStateOf(false) }
+    var draftXml by remember { mutableStateOf("") }
+    var editMode by remember { mutableStateOf(false) }
+    var editorMessage by remember { mutableStateOf("") }
+    var exportXml by remember { mutableStateOf("") }
+    val exporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/xml"),
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    output.write(exportXml.toByteArray(Charsets.UTF_8))
+                } ?: error("Cannot open export destination")
+                editorMessage = "XML saved successfully. Device IMS settings were not changed."
+            } catch (e: Exception) {
+                editorMessage = "Export failed: ${e.message}"
+            }
+        }
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         documents = uris.take(12).map { uri -> readImsXml(context, uri) }
         selected = 0
         comparison = if (documents.size > 1) 1 else 0
+        draftXml = documents.firstOrNull()?.originalXml.orEmpty()
+        editMode = false
     }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("IMS XML Lab", style = MaterialTheme.typography.headlineSmall)
@@ -66,7 +86,7 @@ fun ImsXmlLab() {
         } else {
             Text("${documents.size} files imported")
             documents.forEachIndexed { index, document ->
-                TextButton(onClick = { selected = index }) {
+                TextButton(onClick = { selected = index; draftXml = document.originalXml; editMode = false; editorMessage = "" }) {
                     Text("${if (selected == index) "● " else ""}${document.name} (${document.entries.size} entries)")
                 }
             }
@@ -82,8 +102,45 @@ fun ImsXmlLab() {
                     Text("Differences only")
                 }
             }
-            OutlinedButton(onClick = { showResetConfirmation = true }) {
-                Text("Reset XML Lab to imported defaults")
+            Row {
+                OutlinedButton(onClick = { editMode = !editMode }) { Text(if (editMode) "Close editor" else "Edit XML") }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = { showResetConfirmation = true }) { Text("Reset") }
+            }
+            if (editMode) {
+                Text("Editable draft — original imported XML remains unchanged.")
+                OutlinedTextField(
+                    value = draftXml,
+                    onValueChange = { draftXml = it },
+                    label = { Text("XML draft") },
+                    modifier = Modifier.fillMaxWidth().height(260.dp),
+                    maxLines = 20,
+                )
+                Row {
+                    Button(onClick = {
+                        editorMessage = try {
+                            validateImsXml(draftXml)
+                            "XML is well-formed. Review carrier-specific values before using it."
+                        } catch (e: Exception) {
+                            "Invalid XML: ${e.message}"
+                        }
+                    }) { Text("Validate") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = {
+                        try {
+                            validateImsXml(draftXml)
+                            exportXml = draftXml
+                            exporter.launch("edited_" + (documents.getOrNull(selected)?.name ?: "ims.xml"))
+                        } catch (e: Exception) {
+                            editorMessage = "Cannot export invalid XML: ${e.message}"
+                        }
+                    }) { Text("Export edited XML") }
+                }
+                OutlinedButton(onClick = {
+                    draftXml = documents.getOrNull(selected)?.originalXml.orEmpty()
+                    editorMessage = "Draft restored from the imported original. Live IMS settings unchanged."
+                }) { Text("Restore original draft") }
+                if (editorMessage.isNotEmpty()) Text(editorMessage)
             }
             if (showResetConfirmation) {
                 AlertDialog(
@@ -97,6 +154,9 @@ fun ImsXmlLab() {
                             selected = 0
                             comparison = 0
                             differencesOnly = true
+                            draftXml = ""
+                            editMode = false
+                            editorMessage = ""
                             showResetConfirmation = false
                         }) { Text("Reset lab") }
                     },
@@ -186,7 +246,7 @@ private fun readImsXml(context: android.content.Context, uri: Uri): XmlDocument 
             }
             event = parser.next()
         }
-        XmlDocument(name, entries)
+        XmlDocument(name, entries, originalXml = bytes.toString(Charsets.UTF_8))
     } catch (e: Exception) {
         XmlDocument(name, emptyList(), "Cannot inspect XML: ${e.message}")
     }
@@ -199,5 +259,24 @@ private fun List<XmlEntry>.withOccurrenceKeys(): Map<String, String> {
         val n = (counts[entry.path] ?: 0) + 1
         counts[entry.path] = n
         "${entry.path} [${n}]" to entry.value
+    }
+}
+
+/** Reject DTDs and external entities before saving a user-edited draft. */
+private fun validateImsXml(xml: String) {
+    require(xml.length <= 2 * 1024 * 1024) { "XML exceeds 2 MB limit" }
+    require(!xml.contains("<!DOCTYPE", ignoreCase = true)) { "DOCTYPE is not allowed" }
+    require(!xml.contains("<!ENTITY", ignoreCase = true)) { "ENTITY declarations are not allowed" }
+    val parser = Xml.newPullParser()
+    parser.setInput(java.io.StringReader(xml))
+    var depth = 0
+    var event = parser.eventType
+    while (event != XmlPullParser.END_DOCUMENT) {
+        if (event == XmlPullParser.START_TAG) {
+            depth++
+            require(depth <= 64) { "XML nesting limit exceeded" }
+        }
+        if (event == XmlPullParser.END_TAG) depth--
+        event = parser.next()
     }
 }
