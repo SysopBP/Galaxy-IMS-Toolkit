@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,13 +44,13 @@ fun Home(navController: NavController) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    var shizukuEnabled by rememberSaveable { mutableStateOf(false) }
-    var shizukuGranted by rememberSaveable { mutableStateOf(false) }
-    var subscriptions by rememberSaveable { mutableStateOf(listOf<SubscriptionInfo>()) }
-    var deviceIMSEnabled by rememberSaveable { mutableStateOf(false) }
+    var shizukuEnabled by remember { mutableStateOf(false) }
+    var shizukuGranted by remember { mutableStateOf(false) }
+    var subscriptions by remember { mutableStateOf(listOf<SubscriptionInfo>()) }
+    var deviceIMSEnabled by remember { mutableStateOf(false) }
 
-    var isIMSRegistered by rememberSaveable { mutableStateOf(listOf<Boolean>()) }
-    var newerVersion by rememberSaveable { mutableStateOf("") }
+    var isIMSRegistered by remember { mutableStateOf(listOf<Boolean>()) }
+    var newerVersion by remember { mutableStateOf("") }
 
     fun loadFlags() {
         shizukuGranted = true
