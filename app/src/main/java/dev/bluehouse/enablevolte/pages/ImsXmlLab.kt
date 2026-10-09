@@ -3,6 +3,10 @@ package dev.bluehouse.enablevolte.pages
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Xml
+import android.util.Base64
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -44,6 +48,16 @@ private data class XmlDocument(val name: String, val entries: List<XmlEntry>, va
 fun ImsXmlLab() {
     val context = LocalContext.current
     var documents by remember { mutableStateOf<List<XmlDocument>>(emptyList()) }
+    var discoveryStatus by remember { mutableStateOf("Scanning device IMS XML files…") }
+    var rescan by remember { mutableIntStateOf(0) }
+    LaunchedEffect(rescan) {
+        discoveryStatus = "Scanning protected IMS configuration…"
+        val result = withContext(Dispatchers.IO) { runCatching { discoverImsXml() } }
+        result.onSuccess { found ->
+            if (found.isNotEmpty()) documents = found
+            discoveryStatus = if (found.isEmpty()) "No accessible IMS XML found. You can import files manually." else "${found.size} IMS XML files loaded from device (read-only)."
+        }.onFailure { discoveryStatus = "Automatic scan unavailable: ${it.javaClass.simpleName}. Manual import is still available." }
+    }
     var filter by remember { mutableStateOf("") }
     var selected by remember { mutableIntStateOf(0) }
     var comparison by remember { mutableIntStateOf(0) }
@@ -78,6 +92,8 @@ fun ImsXmlLab() {
         Text("IMS XML Lab", style = MaterialTheme.typography.headlineSmall)
         Text("Read-only. Import Samsung imsconfig, imsprofile and imsswitch XML files. Nothing is changed on the device.")
         Spacer(Modifier.height(12.dp))
+        Text(discoveryStatus)
+        OutlinedButton(onClick = { rescan++ }) { Text("Reload device IMS XML") }
         Button(onClick = { picker.launch(arrayOf("text/xml", "application/xml", "text/*", "*/*")) }) {
             Text("Import XML files")
         }
@@ -224,6 +240,39 @@ private fun readImsXml(context: android.content.Context, uri: Uri): XmlDocument 
             require(count <= 2 * 1024 * 1024) { "File exceeds 2 MB inspection limit" }
             buffer.copyOf(count)
         } ?: error("Unable to open XML")
+        parseImsXml(name, bytes)
+    } catch (e: Exception) {
+        XmlDocument(name, emptyList(), "Cannot inspect XML: ${e.message}")
+    }
+}
+
+private fun discoverImsXml(): List<XmlDocument> {
+    val directory = "/data/user_de/0/com.sec.imsservice/shared_prefs"
+    val listing = ProcessBuilder("su", "-c",
+        "find $directory -maxdepth 1 -type f -name 'ims*.xml' 2>/dev/null | sort | head -12"
+    ).redirectErrorStream(true).start()
+    val names = listing.inputStream.bufferedReader().readLines()
+    require(listing.waitFor() == 0) { "Root IMS directory scan denied" }
+    return names.mapNotNull { path ->
+        val name = path.substringAfterLast('/')
+        if (!Regex("^(imsconfig|imsprofile|imsswitch)_[0-9]+\\.xml$").matches(name)) return@mapNotNull null
+        runCatching {
+            // Base64 keeps XML and shell diagnostics separate; filenames are validated above.
+            val proc = ProcessBuilder("su", "-c",
+                "base64 $directory/$name | tr -d '\\n'"
+            ).redirectErrorStream(true).start()
+            val encoded = proc.inputStream.bufferedReader().readText().take(3_000_000)
+            require(proc.waitFor() == 0) { "Protected XML read denied" }
+            val bytes = Base64.decode(encoded, Base64.DEFAULT)
+            require(bytes.size <= 2 * 1024 * 1024) { "XML exceeds inspection limit" }
+            parseImsXml(name, bytes)
+        }.getOrElse { XmlDocument(name, emptyList(), "Read failed: ${it.javaClass.simpleName}") }
+    }
+}
+
+private fun parseImsXml(name: String, bytes: ByteArray): XmlDocument {
+    return try {
+        validateImsXml(bytes.toString(Charsets.UTF_8))
         val parser = Xml.newPullParser()
         parser.setInput(ByteArrayInputStream(bytes), null)
         val stack = mutableListOf<String>()
@@ -248,7 +297,7 @@ private fun readImsXml(context: android.content.Context, uri: Uri): XmlDocument 
         }
         XmlDocument(name, entries, originalXml = bytes.toString(Charsets.UTF_8))
     } catch (e: Exception) {
-        XmlDocument(name, emptyList(), "Cannot inspect XML: ${e.message}")
+        XmlDocument(name, emptyList(), "Cannot parse XML: ${e.message}")
     }
 }
 
