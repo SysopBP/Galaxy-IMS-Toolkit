@@ -93,6 +93,22 @@ private fun inspectIms(context: Context): DiagnosticResult {
     } catch (e: Exception) { "Shizuku status unavailable: ${e.javaClass.simpleName}" }
     status.appendLine(shizuku)
     report.appendLine(shizuku)
+    // Binder identity is diagnostic only; this app does not yet invoke TokenX's
+    // privileged command transport. Never infer write authorization from UID alone.
+    val shizukuUid = try {
+        val cls = Class.forName("rikka.shizuku.Shizuku")
+        val uid = cls.getMethod("getUid").invoke(null) as? Int
+        uid?.toString() ?: "unknown"
+    } catch (_: Exception) { "unknown" }
+    val routeStatus = when (shizukuUid) {
+        "1000" -> "System UID 1000 binder detected (write access unverified)"
+        "0" -> "Root UID 0 binder detected (write access unverified)"
+        "2000" -> "Shell UID 2000 binder detected (limited permissions)"
+        else -> "Binder backend UID unknown; TokenX route not verified"
+    }
+    status.appendLine("Privilege route: $routeStatus")
+    report.appendLine("Privilege route: $routeStatus")
+    status.appendLine("Carrier toggles: existing Shizuku/instrumentation route; TokenX routing not enabled")
     if (rootAvailable) {
         // Never modify IMS or carrier settings here.
         val secims = try { runDiagnostic("dumpsys secims") } catch (e: Exception) {
