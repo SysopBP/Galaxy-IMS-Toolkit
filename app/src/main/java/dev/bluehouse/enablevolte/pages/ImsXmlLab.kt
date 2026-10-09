@@ -280,6 +280,23 @@ fun ImsXmlLab() {
         Text("Identity checks do not grant IMS write permissions.")
         Text("CSC Module Builder — safe draft", style = MaterialTheme.typography.titleMedium)
         Text("Generate an inactive KernelSU module template. No CSC overlay or carrier changes.")
+        Text("Package preview", style = MaterialTheme.typography.titleMedium)
+        Text("module.prop — module metadata")
+        Text("README.txt — safety and rollback guidance")
+        Text("No system/ overlay is packaged; ZIP is an inactive template.")
+        if (cscInputXml.isNotEmpty()) {
+            val candidateHash = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(cscInputXml.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+            Text("Candidate CSC SHA-256: $candidateHash")
+        }
+        if (cscBaselineXml.isNotEmpty()) {
+            val baselineHash = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(cscBaselineXml.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+            Text("Baseline CSC SHA-256: $baselineHash")
+        }
+        Text("Neither CSC file is inserted into the module ZIP.")
         OutlinedButton(onClick = {
             cscPicker.launch(arrayOf("text/xml", "application/xml", "*/*"))
         }) { Text("Select and validate CSC XML") }
