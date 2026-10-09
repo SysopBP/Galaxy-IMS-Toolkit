@@ -4,6 +4,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.telephony.SubscriptionInfo
+import android.telephony.SubscriptionManager
+import androidx.compose.runtime.remember
 import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -81,6 +83,7 @@ fun Home(navController: NavController) {
                 }
                 else -> {
                     shizukuEnabled = false
+                    shizukuGranted = false
                 }
             }
         } catch (e: IllegalStateException) {
@@ -88,11 +91,11 @@ fun Home(navController: NavController) {
         }
         getLatestAppVersion {
             Log.d(TAG, "Fetched version $it")
-            val latest = SemVer.parse(it)
-            val current = SemVer.parse(BuildConfig.VERSION_NAME)
-            if (latest > current) {
-                newerVersion = it
-            }
+            try {
+                val latest = SemVer.parse(it.removePrefix("v"))
+                val current = SemVer.parse(BuildConfig.VERSION_NAME.removePrefix("v"))
+                if (latest > current) newerVersion = it
+            } catch (e: Exception) { Log.w(TAG, "Invalid release version", e) }
         }
     }
 
@@ -109,7 +112,7 @@ fun Home(navController: NavController) {
                 label = BuildConfig.VERSION_NAME,
                 value = stringResource(R.string.newer_version_available, newerVersion),
             ) {
-                val url = "https://github.com/kyujin-cho/pixel-volte-patch/releases/tag/$newerVersion"
+                val url = "https://github.com/SysopBP/Galaxy-IMS-Toolkit/releases/tag/$newerVersion"
                 val i = Intent(Intent.ACTION_VIEW)
                 i.data = url.toUri()
                 context.startActivity(i, null)
@@ -118,6 +121,7 @@ fun Home(navController: NavController) {
             StringPropertyView(label = BuildConfig.VERSION_NAME, value = stringResource(R.string.running_latest_version))
         }
         HeaderText(text = stringResource(R.string.permissions_capabilities))
+        StringPropertyView(label = "TokenX routing", value = "Not connected to TokenX transport; Shizuku authorization is separate")
         BooleanPropertyView(label = stringResource(R.string.shizuku_service_running), toggled = shizukuEnabled)
         BooleanPropertyView(label = stringResource(R.string.shizuku_permission_granted), toggled = shizukuGranted)
         BooleanPropertyView(label = stringResource(R.string.sim_detected), toggled = subscriptions.isNotEmpty())
