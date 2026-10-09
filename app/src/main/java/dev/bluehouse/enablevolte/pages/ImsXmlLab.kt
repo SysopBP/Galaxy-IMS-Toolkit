@@ -70,6 +70,9 @@ fun ImsXmlLab() {
     var recentBackup by remember {
         mutableStateOf(backupHistory.getString("last_backup", "").orEmpty())
     }
+    var backupRecords by remember {
+        mutableStateOf(backupHistory.getString("backup_records", "").orEmpty())
+    }
     var expectedBackupHash by remember { mutableStateOf("") }
     var backupVerification by remember { mutableStateOf("") }
 
@@ -128,8 +131,14 @@ fun ImsXmlLab() {
                     .joinToString("") { "%02x".format(it) }
                 backupHashVerified = false
                 val saved = "${uri.lastPathSegment.orEmpty().take(80)} | SHA-256: $digest"
-                backupHistory.edit().putString("last_backup", saved).apply()
+                val updatedRecords = (listOf(saved) + backupRecords.lines())
+                    .filter { it.isNotBlank() }.distinct().take(10).joinToString("\\n")
+                backupHistory.edit()
+                    .putString("last_backup", saved)
+                    .putString("backup_records", updatedRecords)
+                    .apply()
                 recentBackup = saved
+                backupRecords = updatedRecords
                 "Original XML snapshot saved. SHA-256: $digest"
             } catch (e: Exception) {
                 backupHashVerified = false
@@ -207,6 +216,12 @@ fun ImsXmlLab() {
             }) { Text("Back up selected original XML") }
             if (snapshotStatus.isNotEmpty()) Text(snapshotStatus)
             if (recentBackup.isNotEmpty()) Text("Most recent backup: $recentBackup")
+            if (backupRecords.isNotEmpty()) {
+                Text("Backup history (up to 10 local records)")
+                backupRecords.split("\\n").filter { it.isNotBlank() }.forEach { record ->
+                    Text(record, style = MaterialTheme.typography.bodySmall)
+                }
+            }
             OutlinedTextField(
                 value = expectedBackupHash,
                 onValueChange = { expectedBackupHash = it.take(64) },
