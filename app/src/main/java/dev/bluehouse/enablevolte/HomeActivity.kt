@@ -376,7 +376,7 @@ fun PixelIMSApp() {
                 composable("home", "Home") { Home(navController) }
                 composable("ims-research", "Samsung IMS") { GalaxyImsSettings() }
                 composable("xml_lab", "IMS XML Lab") { ImsXmlLab() }
-                composable("ksu_modules", "KernelSU Modules") { KernelSuModules() }
+                composable("ksu_modules", "KernelSU Modules") { KernelSuModules(openImsModuleBuilder = { navController.navigate("xml_lab") }) }
                 for (subscription in subscriptions) {
                     navigation(startDestination = "config${subscription.subscriptionId}", route = "config${subscription.subscriptionId}root") {
                         composable("config${subscription.subscriptionId}", "SIM config") { Config(navController, subscription.subscriptionId) }
