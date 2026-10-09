@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <instrumentation
         android:name="dev.bluehouse.enablevolte.BrokerInstrumentation"
-        android:targetPackage="dev.bluehouse.enablevolte"/>
+        android:targetPackage="${applicationId}"/>
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
