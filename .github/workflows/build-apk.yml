@@ -60,27 +60,30 @@ jobs:
         env:
           BUILD_TYPE: ${{ inputs.build-type }}
           RUN_ID: ${{ github.run_id }}
-      - name: align APK with zipalign
-        run: $ANDROID_SDK_ROOT/build-tools/34.0.0/zipalign -v -p 4 app/build/outputs/apk/${BUILD_TYPE}/${FILENAME} app-unsigned-aligned.apk
+      - name: Sign and verify APK
         env:
           BUILD_TYPE: ${{ inputs.build-type }}
           FILENAME: ${{ steps.build_apk.outputs.build_filename }}
-      - name: Save keystore as file
-        run: echo "${KEYSTORE_B64}" | base64 -d > keystore.jks
-        env:
           KEYSTORE_B64: ${{ secrets.keystore }}
-      - name: Sign APK
-        run: echo "${KEY_PASSWORD}" | $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner sign --ks keystore.jks --ks-key-alias "${KEY_ALIAS}" --key-pass "env:KEY_PASSWORD" --out dev.bluehouse.enablevolte.apk app-unsigned-aligned.apk
-        env:
           KEY_ALIAS: ${{ secrets.key-alias }}
           KEY_PASSWORD: ${{ secrets.key-password }}
-          BUILD_TYPE: ${{ inputs.build-type }}
-        if: ${{ env.KEY_PASSWORD != '' }}
-      - name: Rename APK
-        run: mv app-unsigned-aligned.apk dev.bluehouse.enablevolte.apk
-        env:
-          KEY_PASSWORD: ${{ secrets.key-password }}
-        if: ${{ env.KEY_PASSWORD == '' }}
+        run: |
+          set -euo pipefail
+          TOOLS="$ANDROID_SDK_ROOT/build-tools/35.0.0"
+          SOURCE="app/build/outputs/apk/${BUILD_TYPE}/${FILENAME}"
+          if [[ "$BUILD_TYPE" == "debug" ]]; then
+            # Gradle's debug APK is already signed with the debug certificate.
+            cp "$SOURCE" dev.bluehouse.enablevolte.apk
+          else
+            if [[ -z "$KEYSTORE_B64" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
+              echo "::error::Release signing secrets are required"
+              exit 1
+            fi
+            printf '%s' "$KEYSTORE_B64" | base64 -d > keystore.jks
+            "$TOOLS/zipalign" -v -p 4 "$SOURCE" app-aligned.apk
+            "$TOOLS/apksigner" sign --ks keystore.jks --ks-key-alias "$KEY_ALIAS" --ks-pass "pass:$KEY_PASSWORD" --key-pass "pass:$KEY_PASSWORD" --out dev.bluehouse.enablevolte.apk app-aligned.apk
+          fi
+          "$TOOLS/apksigner" verify --verbose --print-certs dev.bluehouse.enablevolte.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
