@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -20,6 +21,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,6 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -206,7 +211,14 @@ fun PixelIMSApp() {
         },
         bottomBar = {
             if (currentBackStackEntry?.destination?.depth?.let { it == 1 } == true) {
-                NavigationBar {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(30.dp),
+                    color = Color(0xF21B1B1F),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 12.dp,
+                ) {
+                    NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp) {
                     val currentDestination = currentBackStackEntry?.destination
                     val items =
                         arrayListOf(
@@ -226,6 +238,13 @@ fun PixelIMSApp() {
                                 Text(screen.title)
                             },
                             selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Color.White,
+                                selectedTextColor = Color.White,
+                                unselectedIconColor = Color(0xFFB8B8BF),
+                                unselectedTextColor = Color(0xFFB8B8BF),
+                                indicatorColor = Color(0xFF45454D),
+                            ),
                             onClick = {
                                 navController.navigate(screen.route) {
                                     // Pop up to the start destination of the graph to
@@ -242,6 +261,7 @@ fun PixelIMSApp() {
                                 }
                             },
                         )
+                    }
                     }
                 }
             }
