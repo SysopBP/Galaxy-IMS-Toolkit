@@ -63,6 +63,8 @@ fun ImsXmlLab() {
     var exportXml by remember { mutableStateOf("") }
     var snapshotXml by remember { mutableStateOf("") }
     var snapshotStatus by remember { mutableStateOf("") }
+    var backupHashVerified by remember { mutableStateOf(false) }
+
     var previewChanges by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var previewMessage by remember { mutableStateOf("") }
     var showDraftDiff by remember { mutableStateOf(false) }
@@ -114,8 +116,10 @@ fun ImsXmlLab() {
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
                     .digest(snapshotXml.toByteArray(Charsets.UTF_8))
                     .joinToString("") { "%02x".format(it) }
+                backupHashVerified = true
                 "Original XML snapshot saved. SHA-256: $digest"
             } catch (e: Exception) {
+                backupHashVerified = false
                 "Snapshot failed: ${e.message}"
             }
         }
@@ -156,6 +160,7 @@ fun ImsXmlLab() {
                 }
             }) { Text("Back up selected original XML") }
             if (snapshotStatus.isNotEmpty()) Text(snapshotStatus)
+            if (backupHashVerified) Text("Backup checksum generated; retain it for later integrity verification.")
             documents.forEachIndexed { index, document ->
                 TextButton(onClick = { selected = index; draftXml = document.originalXml; editMode = false; editorMessage = ""; previewChanges = emptyMap() }) {
                     Text("${if (selected == index) "● " else ""}${document.name} (${document.entries.size} entries)")
