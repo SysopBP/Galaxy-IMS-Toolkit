@@ -253,27 +253,40 @@ private fun readImsXml(context: android.content.Context, uri: Uri): XmlDocument 
 }
 
 private fun discoverImsXml(): List<XmlDocument> {
-    val directory = "/data/user_de/0/com.sec.imsservice/shared_prefs"
-    val listing = ProcessBuilder("su", "-c",
-        "find $directory -maxdepth 1 -type f -name 'ims*.xml' 2>/dev/null | sort | head -12"
-    ).redirectErrorStream(true).start()
-    val names = listing.inputStream.bufferedReader().readLines()
-    require(listing.waitFor() == 0) { "Root IMS directory scan denied" }
-    return names.mapNotNull { path ->
-        val name = path.substringAfterLast('/')
-        if (!Regex("^(imsconfig|imsprofile|imsswitch)_[0-9]+\\.xml$").matches(name)) return@mapNotNull null
-        runCatching {
-            // Base64 keeps XML and shell diagnostics separate; filenames are validated above.
-            val proc = ProcessBuilder("su", "-c",
-                "base64 $directory/$name | tr -d '\\n'"
-            ).redirectErrorStream(true).start()
-            val encoded = proc.inputStream.bufferedReader().readText().take(3_000_000)
-            require(proc.waitFor() == 0) { "Protected XML read denied" }
-            val bytes = Base64.decode(encoded, Base64.DEFAULT)
-            require(bytes.size <= 2 * 1024 * 1024) { "XML exceeds inspection limit" }
-            parseImsXml(name, bytes)
-        }.getOrElse { XmlDocument(name, emptyList(), "Read failed: ${it.javaClass.simpleName}") }
+    val directories = listOf(
+        "/data/user_de/0/com.sec.imsservice/shared_prefs",
+        "/data/user/0/com.sec.imsservice/shared_prefs",
+        "/data/data/com.sec.imsservice/shared_prefs",
+    )
+    val found = mutableListOf<XmlDocument>()
+    val seen = mutableSetOf<String>()
+    for (directory in directories) {
+        val command = "ls -1 $directory/imsconfig_*.xml " +
+            "$directory/imsprofile_*.xml $directory/imsswitch_*.xml 2>/dev/null"
+        val listing = ProcessBuilder("su", "-c", command)
+            .redirectErrorStream(true).start()
+        val paths = listing.inputStream.bufferedReader().readLines()
+        listing.waitFor()
+        for (path in paths) {
+            val name = path.substringAfterLast('/')
+            if (!Regex("^(imsconfig|imsprofile|imsswitch)_[0-9]+\\.xml$").matches(name)) continue
+            if (!seen.add(name)) continue
+            val document = runCatching {
+                val proc = ProcessBuilder("su", "-c", "base64 $path")
+                    .redirectErrorStream(true).start()
+                val encoded = proc.inputStream.bufferedReader().readText().take(3_000_000)
+                require(proc.waitFor() == 0) { "Root read denied" }
+                val bytes = Base64.decode(encoded, Base64.DEFAULT)
+                require(bytes.size <= 2 * 1024 * 1024) { "XML exceeds inspection limit" }
+                parseImsXml(name, bytes)
+            }.getOrElse {
+                XmlDocument(name, emptyList(), "Read failed: ${it.javaClass.simpleName}")
+            }
+            found.add(document)
+            if (found.size >= 12) return found
+        }
     }
+    return found
 }
 
 private fun parseImsXml(name: String, bytes: ByteArray): XmlDocument {
