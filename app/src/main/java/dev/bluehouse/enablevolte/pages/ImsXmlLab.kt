@@ -296,8 +296,8 @@ fun ImsXmlLab() {
         Text("Category: $category")
         Text("Matching copies: " + documents.count { document ->
             when (category) {
-                "IMS" -> document.name.contains("imsservice")
-                "CSC" -> document.name.contains("/optics/")
+                "IMS" -> document.name.contains("com.sec.imsservice") || document.name.substringAfterLast("/").startsWith("ims")
+                "CSC" -> document.name.contains("/optics/") && !document.name.endsWith(".json")
                 "Carrier JSON" -> document.name.endsWith(".json")
                 else -> true
             }
@@ -307,6 +307,11 @@ fun ImsXmlLab() {
         Text(systemBackendStatus, style = MaterialTheme.typography.labelMedium)
         Text(shizukuBackendStatus, style = MaterialTheme.typography.labelMedium)
         Text("Identity checks do not grant IMS write permissions.")
+        var showCscBuilder by remember { mutableStateOf(false) }
+        OutlinedButton(onClick = { showCscBuilder = !showCscBuilder }) {
+            Text(if (showCscBuilder) "Hide CSC Module Builder" else "Open CSC Module Builder")
+        }
+        if (showCscBuilder) {
         Text("CSC Module Builder — safe draft", style = MaterialTheme.typography.titleMedium)
         Text("Generate an inactive KernelSU module template. No CSC overlay or carrier changes.")
         Text("Package preview", style = MaterialTheme.typography.titleMedium)
@@ -378,6 +383,7 @@ fun ImsXmlLab() {
             cscExporter.launch("Galaxy_IMS_CSC_Draft.zip")
         }) { Text("Export CSC module draft ZIP") }
         if (cscBuilderStatus.isNotEmpty()) Text(cscBuilderStatus)
+        }
         OutlinedButton(onClick = { rescan++ }) { Text("Reload device IMS + CSC XML") }
         Button(onClick = { picker.launch(arrayOf("text/xml", "application/xml", "text/*", "*/*")) }) {
             Text("Import XML files")
@@ -768,7 +774,7 @@ private fun saveImsCache(context: android.content.Context, docs: List<XmlDocumen
     for (doc in docs) {
         if (doc.error != null || doc.originalXml.isEmpty()) continue
         val bytes = doc.originalXml.toByteArray(Charsets.UTF_8)
-        if (bytes.size > 2_000_000 || total + bytes.size > 24_000_000) break
+        if (bytes.size > 2_000_000 || total + bytes.size > 96_000_000) continue
         val hash = java.security.MessageDigest.getInstance("SHA-256")
             .digest(doc.name.toByteArray()).joinToString("") { "%02x".format(it) }
         val filename = "$hash.dat"
