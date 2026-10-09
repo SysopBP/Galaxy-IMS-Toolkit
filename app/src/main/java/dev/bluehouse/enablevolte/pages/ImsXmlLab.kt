@@ -279,7 +279,11 @@ fun ImsXmlLab() {
                             "Overlay confirmed in UI: " + cscOverlayConfirmed + "\\n" +
                             "Status: INACTIVE; candidate and baseline are reference-only\\n"
                         val safeFiles = files + mapOf(
-                            "service.sh" to "#!/system/bin/sh\\n# Inactive by design; no mounts or service restarts.\\nexit 0\\n",
+                            "service.sh" to (
+                                "#!/system/bin/sh\\n" +
+                                    "# Inactive; no mounts or service restarts.\\n" +
+                                    "exit 0\\n"
+                            ),
                             "customize.sh" to ("#!/system/bin/sh\\n" +
                                 "ui_print '- Inactive CSC reference module'\\n"),
                             "audit.txt" to audit,
@@ -917,7 +921,12 @@ private fun parseImsXml(name: String, bytes: ByteArray): XmlDocument {
                     require(stack.size < 64) { "XML nesting limit exceeded" }
                     stack.add(parser.name)
                     for (i in 0 until parser.attributeCount) {
-                        entries.add(XmlEntry(stack.joinToString("/") + "/@" + parser.getAttributeName(i), parser.getAttributeValue(i).take(1000)))
+                        entries.add(
+                            XmlEntry(
+                                stack.joinToString("/") + "/@" + parser.getAttributeName(i),
+                                parser.getAttributeValue(i).take(1000),
+                            ),
+                        )
                     }
                 }
                 XmlPullParser.TEXT -> {
