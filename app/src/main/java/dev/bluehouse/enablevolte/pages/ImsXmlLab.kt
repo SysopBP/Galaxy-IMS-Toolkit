@@ -684,21 +684,19 @@ private fun checkImsRootBackend(): String {
 }
 
 private fun discoverImsXml(): List<XmlDocument> {
+    // Prioritize paths verified on SM-S948U1, Android 17. No live files are modified.
     val directories = listOf(
         "/data/user_de/0/com.sec.imsservice/shared_prefs",
         "/data/user/0/com.sec.imsservice/shared_prefs",
-        "/data/data/com.sec.imsservice/shared_prefs",
-        "/system/csc",
-        "/system/omc",
-        "/product/omc",
         "/optics/configs/carriers",
-        "/prism/etc",
+        "/prism/etc/carriers",
     )
     val found = mutableListOf<XmlDocument>()
     val seen = mutableSetOf<String>()
-    val safePath = Regex("^/[a-zA-Z0-9_./-]+[.]xml$")
+    val safePath = Regex("^/[a-zA-Z0-9_./-]+[.](xml|json)$")
     for (directory in directories) {
-        val command = "find $directory -maxdepth 4 -type f -name '*.xml' 2>/dev/null | head -80"
+        val command = "find $directory -maxdepth 6 -type f " +
+            "\\( -name '*.xml' -o -name '*.json' \\) 2>/dev/null | head -250"
         val listing = ProcessBuilder("su", "-c", command)
             .redirectErrorStream(true).start()
         val paths = listing.inputStream.bufferedReader().readLines()
@@ -706,23 +704,29 @@ private fun discoverImsXml(): List<XmlDocument> {
         for (path in paths) {
             if (!safePath.matches(path) || !seen.add(path)) continue
             val name = path.substringAfterLast('/')
-            val relevant = name.startsWith("ims", ignoreCase = true) ||
-                directory.contains("csc") || directory.contains("omc") ||
-                directory.contains("optics") || directory.contains("prism")
-            if (!relevant) continue
+            val isIms = directory.contains("imsservice")
+            val isCarrierCsc = path.contains("/conf/") &&
+                (name == "customer.xml" || name == "cscfeature.xml" ||
+                    name == "customer_carrier_feature.json")
+            val isCarrierIms = name == "imsupdate.json"
+            if (!isIms && !isCarrierCsc && !isCarrierIms) continue
             val document = runCatching {
                 val proc = ProcessBuilder("su", "-c", "base64 $path")
                     .redirectErrorStream(true).start()
                 val encoded = proc.inputStream.bufferedReader().readText().take(3_000_000)
                 require(proc.waitFor() == 0) { "Root read denied" }
                 val bytes = Base64.decode(encoded, Base64.DEFAULT)
-                require(bytes.size <= 2 * 1024 * 1024) { "XML exceeds inspection limit" }
-                parseImsXml(path, bytes)
+                require(bytes.size <= 2 * 1024 * 1024) { "File exceeds inspection limit" }
+                if (name.endsWith(".json")) {
+                    XmlDocument(path, emptyList(), originalXml = bytes.toString(Charsets.UTF_8))
+                } else {
+                    parseImsXml(path, bytes)
+                }
             }.getOrElse {
                 XmlDocument(path, emptyList(), "Read failed: " + it.javaClass.simpleName)
             }
             found.add(document)
-            if (found.size >= 60) return found
+            if (found.size >= 180) return found
         }
     }
     return found
