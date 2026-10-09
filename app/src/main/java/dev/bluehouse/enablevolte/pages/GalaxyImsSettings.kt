@@ -23,9 +23,10 @@ import java.util.concurrent.TimeUnit
 
 private fun readSamsungIms(): String {
     val command = "dumpsys secims | sed -n '/Dump of RegistrationManager:/,/EventLog(RegiMgr):/p' | head -160"
-    val process = ProcessBuilder("su", "-c", command)
-        .redirectErrorStream(true)
-        .start()
+    val process =
+        ProcessBuilder("su", "-c", command)
+            .redirectErrorStream(true)
+            .start()
     if (!process.waitFor(12, TimeUnit.SECONDS)) {
         process.destroyForcibly()
         return "IMS diagnostic timed out"
