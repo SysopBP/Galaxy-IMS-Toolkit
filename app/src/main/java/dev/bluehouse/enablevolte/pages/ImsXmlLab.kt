@@ -131,8 +131,8 @@ fun ImsXmlLab() {
                     .joinToString("") { "%02x".format(it) }
                 backupHashVerified = false
                 val saved = "${uri.lastPathSegment.orEmpty().take(80)} | SHA-256: $digest"
-                val updatedRecords = (listOf(saved) + backupRecords.lines())
-                    .filter { it.isNotBlank() }.distinct().take(10).joinToString("\\n")
+                val updatedRecords = (listOf(saved) + backupRecords.split("\n"))
+                    .filter { it.isNotBlank() }.distinct().take(10).joinToString("\n")
                 backupHistory.edit()
                     .putString("last_backup", saved)
                     .putString("backup_records", updatedRecords)
@@ -218,7 +218,7 @@ fun ImsXmlLab() {
             if (recentBackup.isNotEmpty()) Text("Most recent backup: $recentBackup")
             if (backupRecords.isNotEmpty()) {
                 Text("Backup history (up to 10 local records)")
-                backupRecords.split("\\n").filter { it.isNotBlank() }.forEach { record ->
+                backupRecords.split("\n").filter { it.isNotBlank() }.forEach { record ->
                     Text(record, style = MaterialTheme.typography.bodySmall)
                 }
             }
