@@ -34,7 +34,10 @@ private fun readSamsungIms(): String {
     if (process.exitValue() != 0) {
         return "Root or Samsung IMS diagnostic unavailable"
     }
-    val output = process.inputStream.bufferedReader().use { it.readText().take(30000) }
+    val output =
+        process.inputStream.bufferedReader().use {
+            it.readText().take(30000)
+        }
     if (!output.contains("Dump of RegistrationManager:")) {
         return "Samsung RegistrationManager not found"
     }
