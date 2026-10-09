@@ -66,6 +66,8 @@ fun ImsXmlLab() {
     var snapshotXml by remember { mutableStateOf("") }
     var snapshotStatus by remember { mutableStateOf("") }
     var backupHashVerified by remember { mutableStateOf(false) }
+    var expectedBackupHash by remember { mutableStateOf("") }
+    var backupVerification by remember { mutableStateOf("") }
 
     var previewChanges by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var previewMessage by remember { mutableStateOf("") }
@@ -129,6 +131,32 @@ fun ImsXmlLab() {
         }
     }
 
+    val backupVerifier = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            backupVerification = try {
+                val expected = expectedBackupHash.trim().lowercase(java.util.Locale.ROOT)
+                require(Regex("[0-9a-f]{64}").matches(expected)) {
+                    "Enter the original 64-character SHA-256 checksum"
+                }
+                val bytes = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val data = stream.readBytes()
+                    require(data.size <= 2 * 1024 * 1024) { "Backup exceeds 2 MB limit" }
+                    data
+                } ?: error("Unable to open backup")
+                val actual = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(bytes).joinToString("") { "%02x".format(it) }
+                if (actual == expected) {
+                    "Verified: backup matches the supplied SHA-256 checksum."
+                } else {
+                    "Checksum mismatch: do not use this backup for restoration."
+                }
+            } catch (e: Exception) {
+                "Verification failed: ${e.message}"
+            }
+        }
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         documents = uris.take(12).map { uri -> readImsXml(context, uri) }
         selected = 0
@@ -168,6 +196,18 @@ fun ImsXmlLab() {
                 }
             }) { Text("Back up selected original XML") }
             if (snapshotStatus.isNotEmpty()) Text(snapshotStatus)
+            OutlinedTextField(
+                value = expectedBackupHash,
+                onValueChange = { expectedBackupHash = it.take(64) },
+                label = { Text("Original backup SHA-256") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedButton(onClick = {
+                backupVerifier.launch(arrayOf("application/xml", "text/xml", "*/*"))
+            }) { Text("Verify saved XML backup") }
+            if (backupVerification.isNotEmpty()) Text(backupVerification)
+
             if (backupHashVerified) Text("Backup checksum generated; retain it for later integrity verification.")
             documents.forEachIndexed { index, document ->
                 TextButton(onClick = { selected = index; draftXml = document.originalXml; editMode = false; editorMessage = ""; previewChanges = emptyMap() }) {
