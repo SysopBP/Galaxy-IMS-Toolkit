@@ -26,9 +26,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.SimCard
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -304,12 +301,12 @@ fun PixelIMSApp() {
                     val items =
                         arrayListOf(
                             Screen("home", stringResource(R.string.home), Icons.Filled.Home),
-                            Screen("ims-research", "IMS", Icons.Filled.Tune),
-                            Screen("xml_lab", "XML Lab", Icons.Filled.Description),
+                            Screen("ims-research", "IMS", Icons.Filled.Settings),
+                            Screen("xml_lab", "XML Lab", Icons.Filled.Refresh),
                         )
                     for (subscription in subscriptions) {
                         items.add(
-                            Screen("config${subscription.subscriptionId}", "SIM ${subscriptions.indexOf(subscription) + 1}", Icons.Filled.SimCard),
+                            Screen("config${subscription.subscriptionId}", "SIM ${subscriptions.indexOf(subscription) + 1}", Icons.Filled.Settings),
                         )
                     }
 
