@@ -318,26 +318,36 @@ fun ImsXmlLab() {
         editMode = false
         previewChanges = emptyMap()
     }
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("IMS XML Lab", style = MaterialTheme.typography.headlineSmall)
-        Text("Read-only. Import Samsung imsconfig, imsprofile and imsswitch XML files. Nothing is changed on the device.")
-        Spacer(Modifier.height(12.dp))
-        Text(discoveryStatus)
-        if (cacheStatus.isNotEmpty()) Text(cacheStatus)
-        Text("Local library: private app storage; originals are never changed.")
-        Row {
-            listOf("All", "IMS", "CSC", "Carrier JSON").forEach { choice ->
-                TextButton(onClick = { category = choice }) { Text(choice) }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("DEVICE XML LIBRARY", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Text("Explore IMS and carrier configurations", style = MaterialTheme.typography.titleLarge)
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Library overview", style = MaterialTheme.typography.titleMedium)
+                Text(discoveryStatus, style = MaterialTheme.typography.bodyMedium)
+                if (cacheStatus.isNotEmpty()) Text(cacheStatus, style = MaterialTheme.typography.bodySmall)
+                Text("Read-only device inspection • originals stay unchanged", style = MaterialTheme.typography.labelSmall)
             }
         }
-        Text("Category: $category")
-        val carrierCodes = documents.mapNotNull { doc ->
-            Regex("/(?:optics/configs|prism/etc)/carriers/([A-Z0-9]+)/")
-                .find(doc.name)?.groupValues?.getOrNull(1)
-        }.distinct().sorted()
-        Text("Carrier CSC profiles: ${carrierCodes.size}")
-        Text("Available codes: " + carrierCodes.joinToString(", ").take(400))
-        Text("Active carrier not verified; profiles listed are not necessarily enabled.")
+        Card(shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Browse files", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    listOf("All", "IMS", "CSC", "Carrier JSON").forEach { choice ->
+                        TextButton(onClick = { category = choice }) {
+                            Text(if (category == choice) "● $choice" else choice, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+                val carrierCodes = documents.mapNotNull { doc ->
+                    Regex("/(?:optics/configs|prism/etc)/carriers/([A-Z0-9]+)/")
+                        .find(doc.name)?.groupValues?.getOrNull(1)
+                }.distinct().sorted()
+                Text("CSC profiles: ${carrierCodes.size}", style = MaterialTheme.typography.bodyMedium)
+                Text("Available carrier codes: " + carrierCodes.joinToString(", ").take(400), style = MaterialTheme.typography.bodySmall)
+                Text("Carrier profiles are references, not verified active configurations.", style = MaterialTheme.typography.labelSmall)
+            }
+        }
         var showCscCatalog by remember { mutableStateOf(false) }
         OutlinedButton(onClick = { showCscCatalog = !showCscCatalog }) {
             Text(if (showCscCatalog) "Hide CSC feature reference" else "CSC feature reference")
@@ -360,6 +370,8 @@ fun ImsXmlLab() {
             }
             Text("Reference only • no values applied • support varies by CSC and firmware.")
         }
+        Card(shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Matching copies: " + documents.count { document ->
             when (category) {
                 "IMS" -> document.name.contains("com.sec.imsservice") || document.name.substringAfterLast("/").startsWith("ims")
@@ -368,7 +380,7 @@ fun ImsXmlLab() {
                 else -> true
             }
         })
-        Text("Backend Manager", style = MaterialTheme.typography.titleMedium)
+        Text("Backend connections", style = MaterialTheme.typography.titleMedium)
         Text(backendStatus, style = MaterialTheme.typography.labelMedium)
         Text(systemBackendStatus, style = MaterialTheme.typography.labelMedium)
         Text(shizukuBackendStatus, style = MaterialTheme.typography.labelMedium)
@@ -381,6 +393,8 @@ fun ImsXmlLab() {
             Text(hookStatus)
             Text("Live registration events: unavailable until companion module is installed and scoped.")
             Text("No system_server hooks or runtime overrides are enabled.")
+        }
+            }
         }
         var showCscBuilder by remember { mutableStateOf(false) }
         OutlinedButton(onClick = { showCscBuilder = !showCscBuilder }) {
@@ -459,8 +473,9 @@ fun ImsXmlLab() {
         }) { Text("Export CSC module draft ZIP") }
         if (cscBuilderStatus.isNotEmpty()) Text(cscBuilderStatus)
         }
-        OutlinedButton(onClick = { rescan++ }) { Text("Reload device IMS + CSC XML") }
-        Button(onClick = { picker.launch(arrayOf("text/xml", "application/xml", "text/*", "*/*")) }) {
+        Text("Library actions", style = MaterialTheme.typography.titleMedium)
+        OutlinedButton(onClick = { rescan++ }, modifier = Modifier.fillMaxWidth()) { Text("Reload device IMS + CSC XML") }
+        Button(onClick = { picker.launch(arrayOf("text/xml", "application/xml", "text/*", "*/*")) }, modifier = Modifier.fillMaxWidth()) {
             Text("Import XML files")
         }
         if (documents.isEmpty()) {
