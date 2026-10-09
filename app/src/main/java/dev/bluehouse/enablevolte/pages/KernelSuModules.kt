@@ -3,12 +3,29 @@ package dev.bluehouse.enablevolte.pages
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -101,7 +118,8 @@ fun KernelSuModules() {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("KERNEL SUITE", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         Text("KernelSU Modules", style = MaterialTheme.typography.headlineSmall)
-        Text("Inspect installed modules and install trusted ZIP packages. Installing modules executes privileged scripts.", style = MaterialTheme.typography.bodySmall)
+        Text("Inspect installed modules and install trusted ZIP packages. Installing modules executes privileged scripts.",
+            style = MaterialTheme.typography.bodySmall)
         Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Installed modules", style = MaterialTheme.typography.titleMedium)
@@ -112,14 +130,17 @@ fun KernelSuModules() {
         Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Install / update module", style = MaterialTheme.typography.titleMedium)
-                Button(onClick = { picker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }, enabled = !busy) { Text("Select module ZIP") }
+                Button(onClick = { picker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
+                    enabled = !busy) { Text("Select module ZIP") }
                 if (selectedName.isNotEmpty()) Text(selectedName, style = MaterialTheme.typography.bodySmall)
                 if (validation.isNotEmpty()) Text(validation, style = MaterialTheme.typography.bodySmall)
-                Button(onClick = { confirm = true }, enabled = selected != null && validation.startsWith("ZIP structure validated") && !busy) {
+                Button(onClick = { confirm = true },
+                    enabled = selected != null && validation.startsWith("ZIP structure validated") && !busy) {
                     Text("Review installation")
                 }
                 if (result.isNotEmpty()) Text(result, style = MaterialTheme.typography.bodySmall)
-                Text("A successful installation may require a reboot. This app never reboots automatically.", style = MaterialTheme.typography.labelSmall)
+                Text("A successful installation may require a reboot. This app never reboots automatically.",
+                    style = MaterialTheme.typography.labelSmall)
             }
         }
     }
