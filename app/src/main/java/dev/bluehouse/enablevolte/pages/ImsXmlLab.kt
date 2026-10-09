@@ -294,6 +294,13 @@ fun ImsXmlLab() {
             }
         }
         Text("Category: $category")
+        val carrierCodes = documents.mapNotNull { doc ->
+            Regex("/(?:optics/configs|prism/etc)/carriers/([A-Z0-9]+)/")
+                .find(doc.name)?.groupValues?.getOrNull(1)
+        }.distinct().sorted()
+        Text("Carrier CSC profiles: ${carrierCodes.size}")
+        Text("Available codes: " + carrierCodes.joinToString(", ").take(400))
+        Text("Active carrier not verified; profiles listed are not necessarily enabled.")
         Text("Matching copies: " + documents.count { document ->
             when (category) {
                 "IMS" -> document.name.contains("com.sec.imsservice") || document.name.substringAfterLast("/").startsWith("ims")
