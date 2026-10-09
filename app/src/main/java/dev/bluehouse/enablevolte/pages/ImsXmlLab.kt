@@ -180,6 +180,28 @@ fun ImsXmlLab() {
     var cscInputName by remember { mutableStateOf("") }
     var cscInputXml by remember { mutableStateOf("") }
     var cscValidation by remember { mutableStateOf("No CSC file selected") }
+    var cscBaselineXml by remember { mutableStateOf("") }
+    var cscDiffStatus by remember { mutableStateOf("Select two CSC XML files to compare.") }
+    val cscBaselinePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            cscDiffStatus = try {
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: error("Cannot read baseline")
+                require(bytes.size <= 2 * 1024 * 1024) { "Baseline exceeds 2 MB" }
+                val baseline = bytes.toString(Charsets.UTF_8)
+                val parser = Xml.newPullParser()
+                parser.setInput(java.io.StringReader(baseline))
+                while (parser.next() != XmlPullParser.END_DOCUMENT) { }
+                cscBaselineXml = baseline
+                "Baseline CSC XML validated. Compare it with the selected candidate."
+            } catch (e: Exception) {
+                cscBaselineXml = ""
+                "Baseline invalid: ${e.javaClass.simpleName}"
+            }
+        }
+    }
     val cscPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -262,6 +284,22 @@ fun ImsXmlLab() {
             cscPicker.launch(arrayOf("text/xml", "application/xml", "*/*"))
         }) { Text("Select and validate CSC XML") }
         Text(cscValidation)
+        OutlinedButton(onClick = {
+            cscBaselinePicker.launch(arrayOf("text/xml", "application/xml", "*/*"))
+        }) { Text("Select baseline CSC XML") }
+        Text(cscDiffStatus)
+        if (cscInputXml.isNotEmpty() && cscBaselineXml.isNotEmpty()) {
+            val before = cscBaselineXml.lines()
+            val after = cscInputXml.lines()
+            val removed = before.filterNot { it in after }.take(15)
+            val added = after.filterNot { it in before }.take(15)
+            Text("CSC comparison preview (line-level, max 15 per side)")
+            Text("Removed / changed baseline lines: ${removed.size} shown")
+            removed.forEach { Text("- ${it.take(150)}") }
+            Text("Added / changed candidate lines: ${added.size} shown")
+            added.forEach { Text("+ ${it.take(150)}") }
+            Text("Preview only. This does not validate carrier compatibility.")
+        }
         if (cscInputXml.isNotEmpty()) {
             Text("Selected: $cscInputName")
             Text("XML preview: ${cscInputXml.take(500)}")
