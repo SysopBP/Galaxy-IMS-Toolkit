@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,7 @@ fun Home(navController: NavController) {
     val scrollState = rememberScrollState()
 
     var shizukuEnabled by remember { mutableStateOf(false) }
+    var phoneStateGranted by remember { mutableStateOf(false) }
     var shizukuGranted by remember { mutableStateOf(false) }
     var subscriptions by remember { mutableStateOf(listOf<SubscriptionInfo>()) }
     var deviceIMSEnabled by remember { mutableStateOf(false) }
@@ -73,7 +75,8 @@ fun Home(navController: NavController) {
     var permissionMessage by remember { mutableStateOf("") }
     var showPermissions by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-        permissionMessage = if (results.values.all { it }) "Android permissions granted" else "Some permissions denied; review app settings."
+        phoneStateGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+        permissionMessage = if (phoneStateGranted) "Android phone-state permission granted" else "Phone-state permission denied; review app settings."
     }
     fun requestAvailablePermissions() {
         val missing = listOf(Manifest.permission.READ_PHONE_STATE).filter {
@@ -83,7 +86,10 @@ fun Home(navController: NavController) {
         else permissionMessage = "Android phone-state permission already granted."
         try {
             if (checkShizukuPermission(0) == ShizukuStatus.NOT_GRANTED) {
-                Shizuku.requestPermission(7001)
+                if (Shizuku.pingBinder()) {
+                    permissionMessage = "Requesting Shizuku authorization…"
+                    Shizuku.requestPermission(7001)
+                } else permissionMessage = "Shizuku service is not connected."
             }
         } catch (e: Exception) {
             permissionMessage = "Shizuku unavailable: " + e.javaClass.simpleName
@@ -91,7 +97,9 @@ fun Home(navController: NavController) {
     }
 
     fun loadFlags() {
-        shizukuGranted = checkShizukuPermission(0) == ShizukuStatus.GRANTED
+        shizukuEnabled = Shizuku.pingBinder()
+        shizukuGranted = shizukuEnabled && checkShizukuPermission(0) == ShizukuStatus.GRANTED
+        phoneStateGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
         subscriptions = carrierModer.subscriptions
         deviceIMSEnabled = carrierModer.deviceSupportsIMS
 
@@ -100,29 +108,34 @@ fun Home(navController: NavController) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        try {
-            when (checkShizukuPermission(0)) {
-                ShizukuStatus.GRANTED -> {
-                    shizukuEnabled = true
-                    loadFlags()
-                }
-                ShizukuStatus.NOT_GRANTED -> {
-                    shizukuEnabled = true
-                    Shizuku.addRequestPermissionResultListener { _, grantResult ->
-                        if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                            loadFlags()
-                        }
-                    }
-                }
-                else -> {
-                    shizukuEnabled = false
-                    shizukuGranted = false
-                }
+    DisposableEffect(Unit) {
+        val permissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+            if (requestCode == 7001) {
+                shizukuGranted = grantResult == PackageManager.PERMISSION_GRANTED
+                permissionMessage = if (shizukuGranted) "Shizuku authorization granted" else "Shizuku authorization denied"
+                if (shizukuGranted) runCatching { loadFlags() }
             }
-        } catch (e: IllegalStateException) {
-            shizukuEnabled = false
         }
+        val binderListener = Shizuku.OnBinderReceivedListener {
+            shizukuEnabled = true
+            runCatching { loadFlags() }
+        }
+        val deadListener = Shizuku.OnBinderDeadListener {
+            shizukuEnabled = false
+            shizukuGranted = false
+        }
+        Shizuku.addRequestPermissionResultListener(permissionListener)
+        Shizuku.addBinderReceivedListenerSticky(binderListener)
+        Shizuku.addBinderDeadListener(deadListener)
+        onDispose {
+            Shizuku.removeRequestPermissionResultListener(permissionListener)
+            Shizuku.removeBinderReceivedListener(binderListener)
+            Shizuku.removeBinderDeadListener(deadListener)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        runCatching { loadFlags() }.onFailure { Log.w(TAG, "Permission status refresh failed", it) }
         getLatestAppVersion {
             Log.d(TAG, "Fetched version $it")
             try {
@@ -176,12 +189,14 @@ fun Home(navController: NavController) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("PERMISSION MANAGER", color = Color(0xFFB7C4DA), fontWeight = FontWeight.SemiBold)
                 Text("Request Android phone-state access and Shizuku authorization. IMS privileges require separate verification.")
-                Button(onClick = { requestAvailablePermissions() }, modifier = Modifier.fillMaxWidth()) { Text("Enable available permissions") }
+                Button(onClick = { requestAvailablePermissions() }, modifier = Modifier.fillMaxWidth(), enabled = !phoneStateGranted || !shizukuGranted) {
+                    Text(if (phoneStateGranted && shizukuGranted) "Available permissions granted" else "Enable available permissions", color = Color.White)
+                }
                 OutlinedButton(onClick = { showPermissions = !showPermissions }, modifier = Modifier.fillMaxWidth()) {
                     Text(if (showPermissions) "Hide permission details" else "View permission details")
                 }
                 if (showPermissions) {
-                    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+                    val granted = phoneStateGranted
                     Text("Phone state: " + if (granted) "Granted" else "Not granted")
                     Text("Shizuku authorization: " + if (shizukuGranted) "Granted" else "Not granted")
                     Text("TokenX UID 1000: Not verified")
