@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
 private data class ImsTask(val slot: Int, val state: String, val profile: String, val pdn: String)
 
 private fun readRegistration(): String {
-    val process = ProcessBuilder("su", "-c", "dumpsys secims").redirectErrorStream(true).start()
+    val process = ProcessBuilder("su", "-c", "dumpsys secims | sed -n '/Dump of RegistrationManager:/,/EventLog(RegiMgr):/p' | head -120").redirectErrorStream(true).start()
     val finished = process.waitFor(12, TimeUnit.SECONDS)
     if (!finished) {
         process.destroyForcibly()
