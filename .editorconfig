@@ -1,3 +1,8 @@
 [*.{kt,kts}]
 ktlint_standard_function-naming = disabled
 ktlint_standard_property-naming = disabled
+
+# Compose DSL formatting may join expressions beyond the 140-character limit.
+# Scope this exception to the IMS XML Lab; retain all other ktlint checks.
+[**/ImsXmlLab.kt]
+ktlint_standard_max-line-length = disabled
