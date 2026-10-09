@@ -55,8 +55,14 @@ fun ImsXmlLab() {
         val result = withContext(Dispatchers.IO) { runCatching { discoverImsXml() } }
         result.onSuccess { found ->
             if (found.isNotEmpty()) documents = found
-            discoveryStatus = if (found.isEmpty()) "No accessible IMS XML found. You can import files manually." else "${found.size} IMS XML files loaded from device (read-only)."
-        }.onFailure { discoveryStatus = "Automatic scan unavailable: ${it.javaClass.simpleName}. Manual import is still available." }
+            discoveryStatus = if (found.isEmpty()) {
+                "No accessible IMS XML found. You can import files manually."
+            } else {
+                "${found.size} IMS XML files loaded from device (read-only)."
+            }
+        }.onFailure {
+            discoveryStatus = "Automatic scan unavailable: ${it.javaClass.simpleName}."
+        }
     }
     var filter by remember { mutableStateOf("") }
     var selected by remember { mutableIntStateOf(0) }
