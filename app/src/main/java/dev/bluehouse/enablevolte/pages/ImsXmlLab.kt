@@ -48,6 +48,8 @@ private data class XmlDocument(val name: String, val entries: List<XmlEntry>, va
 fun ImsXmlLab() {
     val context = LocalContext.current
     var documents by remember { mutableStateOf<List<XmlDocument>>(emptyList()) }
+    var category by remember { mutableStateOf("All") }
+    var cacheStatus by remember { mutableStateOf("") }
     var discoveryStatus by remember { mutableStateOf("Scanning device IMS XML files…") }
     var backendStatus by remember { mutableStateOf("Root backend not checked") }
     var systemBackendStatus by remember { mutableStateOf("TokenX System UID 1000 not checked") }
@@ -80,6 +82,13 @@ fun ImsXmlLab() {
     var previewMessage by remember { mutableStateOf("") }
     var showDraftDiff by remember { mutableStateOf(false) }
     LaunchedEffect(rescan) {
+        if (documents.isEmpty()) {
+            val cached = withContext(Dispatchers.IO) { loadImsCache(context) }
+            if (cached.isNotEmpty()) {
+                documents = cached
+                cacheStatus = "Loaded ${cached.size} saved local copies"
+            }
+        }
         discoveryStatus = "Scanning protected IMS and CSC XML…"
         val result = withContext(Dispatchers.IO) {
             backendStatus = checkImsRootBackend()
@@ -89,6 +98,8 @@ fun ImsXmlLab() {
         }
         result.onSuccess { found ->
             if (found.isNotEmpty()) {
+                val savedCount = withContext(Dispatchers.IO) { saveImsCache(context, found) }
+                cacheStatus = "Saved $savedCount private local copies"
                 documents = found
                 selected = 0
                 comparison = if (found.size > 1) 1 else 0
@@ -275,6 +286,22 @@ fun ImsXmlLab() {
         Text("Read-only. Import Samsung imsconfig, imsprofile and imsswitch XML files. Nothing is changed on the device.")
         Spacer(Modifier.height(12.dp))
         Text(discoveryStatus)
+        if (cacheStatus.isNotEmpty()) Text(cacheStatus)
+        Text("Local library: private app storage; originals are never changed.")
+        Row {
+            listOf("All", "IMS", "CSC", "Carrier JSON").forEach { choice ->
+                TextButton(onClick = { category = choice }) { Text(choice) }
+            }
+        }
+        Text("Category: $category")
+        Text("Matching copies: " + documents.count { document ->
+            when (category) {
+                "IMS" -> document.name.contains("imsservice")
+                "CSC" -> document.name.contains("/optics/")
+                "Carrier JSON" -> document.name.endsWith(".json")
+                else -> true
+            }
+        })
         Text("Backend Manager", style = MaterialTheme.typography.titleMedium)
         Text(backendStatus, style = MaterialTheme.typography.labelMedium)
         Text(systemBackendStatus, style = MaterialTheme.typography.labelMedium)
@@ -718,7 +745,7 @@ private fun discoverImsXml(): List<XmlDocument> {
                 val bytes = Base64.decode(encoded, Base64.DEFAULT)
                 require(bytes.size <= 2 * 1024 * 1024) { "File exceeds inspection limit" }
                 if (name.endsWith(".json")) {
-                    XmlDocument(path, emptyList(), originalXml = bytes.toString(Charsets.UTF_8))
+                    parseCarrierJson(path, bytes)
                 } else {
                     parseImsXml(path, bytes)
                 }
@@ -730,6 +757,74 @@ private fun discoverImsXml(): List<XmlDocument> {
         }
     }
     return found
+}
+
+private fun saveImsCache(context: android.content.Context, docs: List<XmlDocument>): Int {
+    val dir = java.io.File(context.filesDir, "ims_csc_library")
+    dir.mkdirs()
+    var total = 0
+    var count = 0
+    val manifest = org.json.JSONArray()
+    for (doc in docs) {
+        if (doc.error != null || doc.originalXml.isEmpty()) continue
+        val bytes = doc.originalXml.toByteArray(Charsets.UTF_8)
+        if (bytes.size > 2_000_000 || total + bytes.size > 24_000_000) break
+        val hash = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(doc.name.toByteArray()).joinToString("") { "%02x".format(it) }
+        val filename = "$hash.dat"
+        java.io.File(dir, filename).writeBytes(bytes)
+        manifest.put(org.json.JSONObject().put("path", doc.name).put("file", filename))
+        total += bytes.size
+        count++
+    }
+    java.io.File(dir, "index.json").writeText(manifest.toString())
+    return count
+}
+
+private fun loadImsCache(context: android.content.Context): List<XmlDocument> = runCatching {
+    val dir = java.io.File(context.filesDir, "ims_csc_library")
+    val index = java.io.File(dir, "index.json")
+    if (!index.isFile) return@runCatching emptyList()
+    val array = org.json.JSONArray(index.readText())
+    (0 until array.length()).mapNotNull { i ->
+        val record = array.getJSONObject(i)
+        val path = record.getString("path")
+        val filename = record.getString("file")
+        if (!Regex("[0-9a-f]{64}[.]dat").matches(filename)) return@mapNotNull null
+        val file = java.io.File(dir, filename)
+        if (!file.isFile || file.length() > 2_000_000) return@mapNotNull null
+        val bytes = file.readBytes()
+        if (path.endsWith(".json")) parseCarrierJson(path, bytes) else parseImsXml(path, bytes)
+    }
+}.getOrDefault(emptyList())
+
+private fun parseCarrierJson(name: String, bytes: ByteArray): XmlDocument = try {
+    val text = bytes.toString(Charsets.UTF_8)
+    val value = org.json.JSONTokener(text).nextValue()
+    require(value is org.json.JSONObject || value is org.json.JSONArray) { "Expected JSON object or array" }
+    val entries = mutableListOf<XmlEntry>()
+    fun walk(node: Any?, path: String, depth: Int) {
+        if (entries.size >= 10000 || depth > 20) return
+        when (node) {
+            is org.json.JSONObject -> {
+                val keys = node.keys()
+                while (keys.hasNext() && entries.size < 10000) {
+                    val key = keys.next()
+                    walk(node.opt(key), "$path/$key", depth + 1)
+                }
+            }
+            is org.json.JSONArray -> {
+                for (i in 0 until minOf(node.length(), 1000)) {
+                    walk(node.opt(i), "$path/$i", depth + 1)
+                }
+            }
+            else -> entries.add(XmlEntry(path, node.toString().take(1000)))
+        }
+    }
+    walk(value, "json", 0)
+    XmlDocument(name, entries, originalXml = text)
+} catch (e: Exception) {
+    XmlDocument(name, emptyList(), "Invalid JSON: " + e.javaClass.simpleName)
 }
 
 private fun parseImsXml(name: String, bytes: ByteArray): XmlDocument {
