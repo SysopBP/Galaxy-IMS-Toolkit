@@ -49,10 +49,14 @@ fun ImsXmlLab() {
     val context = LocalContext.current
     var documents by remember { mutableStateOf<List<XmlDocument>>(emptyList()) }
     var discoveryStatus by remember { mutableStateOf("Scanning device IMS XML files…") }
+    var backendStatus by remember { mutableStateOf("Root backend not checked") }
     var rescan by remember { mutableIntStateOf(0) }
     LaunchedEffect(rescan) {
         discoveryStatus = "Scanning protected IMS configuration…"
-        val result = withContext(Dispatchers.IO) { runCatching { discoverImsXml() } }
+        val result = withContext(Dispatchers.IO) {
+            backendStatus = checkImsRootBackend()
+            runCatching { discoverImsXml() }
+        }
         result.onSuccess { found ->
             if (found.isNotEmpty()) documents = found
             discoveryStatus = if (found.isEmpty()) {
@@ -99,6 +103,7 @@ fun ImsXmlLab() {
         Text("Read-only. Import Samsung imsconfig, imsprofile and imsswitch XML files. Nothing is changed on the device.")
         Spacer(Modifier.height(12.dp))
         Text(discoveryStatus)
+        Text(backendStatus, style = MaterialTheme.typography.labelMedium)
         OutlinedButton(onClick = { rescan++ }) { Text("Reload device IMS XML") }
         Button(onClick = { picker.launch(arrayOf("text/xml", "application/xml", "text/*", "*/*")) }) {
             Text("Import XML files")
@@ -250,6 +255,19 @@ private fun readImsXml(context: android.content.Context, uri: Uri): XmlDocument 
     } catch (e: Exception) {
         XmlDocument(name, emptyList(), "Cannot inspect XML: ${e.message}")
     }
+}
+
+private fun checkImsRootBackend(): String {
+    return runCatching {
+        val process = ProcessBuilder("su", "-c", "id -u")
+            .redirectErrorStream(true).start()
+        val uid = process.inputStream.bufferedReader().readText().trim()
+        if (process.waitFor() == 0 && uid == "0") {
+            "Root backend: UID 0 verified • XML access read-only"
+        } else {
+            "Root backend unavailable (UID: ${uid.take(24)})"
+        }
+    }.getOrElse { "Root backend unavailable: ${it.javaClass.simpleName}" }
 }
 
 private fun discoverImsXml(): List<XmlDocument> {
