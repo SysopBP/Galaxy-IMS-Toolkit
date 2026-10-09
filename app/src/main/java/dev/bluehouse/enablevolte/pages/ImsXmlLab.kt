@@ -235,18 +235,18 @@ fun ImsXmlLab() {
                     java.util.zip.ZipOutputStream(stream).use { zip ->
                         val files = mapOf(
                             "module.prop" to (
-                                "id=galaxy_ims_csc_draft\\n" +
-                                    "name=Galaxy IMS CSC Draft\\n" +
-                                    "version=0.1\\nversionCode=1\\n" +
-                                    "author=Galaxy IMS Toolkit\\n" +
-                                    "description=Inactive CSC overlay template; no changes installed\\n"
+                                "id=galaxy_ims_csc_draft\n" +
+                                    "name=Galaxy IMS CSC Draft\n" +
+                                    "version=0.1\nversionCode=1\n" +
+                                    "author=Galaxy IMS Toolkit\n" +
+                                    "description=Inactive CSC overlay template; no changes installed\n"
                             ),
                             "README.txt" to (
-                                "CSC MODULE DRAFT - INACTIVE\\n" +
-                                    "No system overlay is included. This package does not modify CSC.\\n" +
-                                    "Verify the correct CSC path and target firmware before adding files.\\n" +
-                                    "Keep an independent backup and recovery plan before installation.\\n" +
-                                    "To roll back an installed module, disable or remove it in KernelSU.\\n"
+                                "CSC MODULE DRAFT - INACTIVE\n" +
+                                    "No system overlay is included. This package does not modify CSC.\n" +
+                                    "Verify the correct CSC path and target firmware before adding files.\n" +
+                                    "Keep an independent backup and recovery plan before installation.\n" +
+                                    "To roll back an installed module, disable or remove it in KernelSU.\n"
                             ),
                         )
                         files.forEach { (name, contents) ->
