@@ -115,6 +115,9 @@ fun PixelIMSApp() {
 
     fun generateNavBuilder(): (NavGraphBuilder.() -> Unit) =
         {
+            composable("ims-research", "Samsung IMS") {
+                GalaxyImsSettings()
+            }
             composable("home", context.resources.getString(R.string.home)) {
                 Home(navController)
             }
