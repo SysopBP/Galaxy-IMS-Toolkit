@@ -51,6 +51,7 @@ import dev.bluehouse.enablevolte.pages.Config
 import dev.bluehouse.enablevolte.pages.DumpedConfig
 import dev.bluehouse.enablevolte.pages.Editor
 import dev.bluehouse.enablevolte.pages.Home
+import dev.bluehouse.enablevolte.pages.ImsXmlLab
 import dev.bluehouse.enablevolte.pages.SamsungImsProfiles
 import dev.bluehouse.enablevolte.ui.theme.EnableVoLTETheme
 import org.lsposed.hiddenapibypass.HiddenApiBypass
@@ -100,6 +101,9 @@ fun PixelIMSApp() {
             composable("home", context.resources.getString(R.string.home)) {
                 Home(navController)
             }
+            composable("xml_lab", "IMS XML Lab") {
+                ImsXmlLab()
+            }
         })
     }
 
@@ -107,6 +111,9 @@ fun PixelIMSApp() {
         {
             composable("home", "Home") {
                 Home(navController)
+            }
+            composable("xml_lab", "IMS XML Lab") {
+                ImsXmlLab()
             }
         }
 
@@ -208,6 +215,7 @@ fun PixelIMSApp() {
                     val items =
                         arrayListOf(
                             Screen("home", stringResource(R.string.home), Icons.Filled.Home),
+                            Screen("xml_lab", "XML Lab", Icons.Filled.Settings),
                         )
                     for (subscription in subscriptions) {
                         items.add(
