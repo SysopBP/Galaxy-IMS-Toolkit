@@ -34,6 +34,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
@@ -279,7 +281,7 @@ fun PixelIMSApp() {
         bottomBar = {
             if (currentBackStackEntry?.destination?.depth?.let { it == 1 } == true) {
                 Surface(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 5.dp),
                     shape = RoundedCornerShape(if (themeMode == "miuix") 36.dp else 30.dp),
                     color = when (themeMode) {
                         "glass" -> Color(0x66434B60)
@@ -290,7 +292,11 @@ fun PixelIMSApp() {
                     tonalElevation = 8.dp,
                     shadowElevation = 12.dp,
                 ) {
-                    NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp) {
+                    NavigationBar(
+                        modifier = Modifier.height(66.dp),
+                        containerColor = Color.Transparent,
+                        tonalElevation = 0.dp,
+                    ) {
                     val currentDestination = currentBackStackEntry?.destination
                     val items =
                         arrayListOf(
@@ -306,9 +312,9 @@ fun PixelIMSApp() {
 
                     items.forEach { screen ->
                         NavigationBarItem(
-                            icon = { Icon(screen.icon, contentDescription = null) },
+                            icon = { Icon(screen.icon, contentDescription = null, modifier = Modifier.height(20.dp)) },
                             label = {
-                                Text(screen.title)
+                                Text(screen.title, fontSize = 10.sp, maxLines = 1)
                             },
                             selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                             colors = NavigationBarItemDefaults.colors(
