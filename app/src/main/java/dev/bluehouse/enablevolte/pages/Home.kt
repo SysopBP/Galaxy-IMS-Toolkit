@@ -36,6 +36,7 @@ import dev.bluehouse.enablevolte.uniqueName
 import net.swiftzer.semver.SemVer
 import rikka.shizuku.Shizuku
 
+// Galaxy IMS alpha: refresh CI after fork Actions activation.
 const val TAG = "HomeActivity:Home"
 
 @Suppress("ktlint:standard:function-naming")
