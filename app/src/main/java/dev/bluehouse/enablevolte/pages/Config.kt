@@ -7,6 +7,8 @@ import android.os.Build.VERSION
 import android.os.Build.VERSION_CODES
 import android.telephony.CarrierConfigManager
 import android.util.Log
+import rikka.shizuku.Shizuku
+import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -147,9 +149,20 @@ fun Config(
         InfiniteLoadingDialog()
     } else {
         Column(modifier = Modifier.padding(Dp(16f)).verticalScroll(scrollState)) {
-            ClickablePropertyView(label = "Samsung IMS Profiles", value = "Read-only slot diagnostics", onClick = {
-                navController.navigate("config${subId}/imsprofiles")
-            })
+            val systemWriteReady = try {
+                Shizuku.pingBinder() &&
+                    Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+                    Shizuku.getUid() == android.os.Process.SYSTEM_UID
+            } catch (_: Exception) { false }
+            if (!systemWriteReady) {
+                HeaderText(text = "System permission required")
+                Text(
+                    "Carrier toggles are disabled until this app is authorized through a verified " +
+                        "System UID 1000 Shizuku binder. Root UID 0 or a separate TokenX session " +
+                        "does not grant this app system write access.",
+                )
+                Text("Read-only IMS diagnostics remain available from the Samsung IMS tab.")
+            } else {
             HeaderText(text = stringResource(R.string.feature_toggles))
             BooleanPropertyView(label = stringResource(R.string.enable_volte), toggled = voLTEEnabled) {
                 voLTEEnabled =
@@ -561,6 +574,7 @@ fun Config(
                 value = "",
             ) {
                 moder.restartIMSRegistration()
+            }
             }
         }
     }
