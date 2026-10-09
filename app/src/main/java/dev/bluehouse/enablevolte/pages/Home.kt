@@ -1,5 +1,6 @@
 package dev.bluehouse.enablevolte.pages
 
+import android.os.Build
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.telephony.SubscriptionInfo
@@ -95,6 +96,12 @@ fun Home(navController: NavController) {
     }
 
     Column(modifier = Modifier.padding(Dp(16f)).verticalScroll(scrollState)) {
+        HeaderText(text = "Galaxy device diagnostics")
+        StringPropertyView(label = "Manufacturer", value = Build.MANUFACTURER)
+        StringPropertyView(label = "Model", value = Build.MODEL)
+        StringPropertyView(label = "Android", value = Build.VERSION.RELEASE)
+        StringPropertyView(label = "Security patch", value = Build.VERSION.SECURITY_PATCH)
+        StringPropertyView(label = "Samsung device", value = if (Build.MANUFACTURER.equals("samsung", ignoreCase = true)) "Detected" else "Not detected")
         HeaderText(text = stringResource(R.string.version))
         if (newerVersion.isNotEmpty()) {
             ClickablePropertyView(
