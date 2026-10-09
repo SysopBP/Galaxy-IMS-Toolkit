@@ -61,7 +61,7 @@ private fun runDiagnostic(command: String): String {
 // Read only the relevant Samsung registration lines at the source. The full
 // secims dump contains extensive historical logs and subscriber identifiers.
 private fun samsungRegistrationSummary(): String = runDiagnostic(
-    "dumpsys secims 2>&1 | grep -E 'SIM slot: \\[|state: \\[|enableService(Volte|Vowifi|Rcs|Vilte)=' | tail -80"
+    "dumpsys secims 2>&1 | grep -E 'SIM slot: \\[|state: \\[|enableService(Volte|Vowifi|Rcs|Vilte)=' | head -80"
 )
 
 private fun privilegedSubscriptionSummary(): String = runDiagnostic(
@@ -129,7 +129,7 @@ private fun inspectIms(context: Context): DiagnosticResult {
         }
         status.appendLine("Android subscription service (privileged):")
         status.appendLine(subSummary)
-        report.appendLine("Privileged subscription summary:\\n$subSummary")
+        report.appendLine("Privileged subscription summary:\n$subSummary")
         val secims = try { samsungRegistrationSummary() } catch (e: Exception) {
             "Samsung registration query failed: ${e.javaClass.simpleName}"
         }
@@ -150,9 +150,9 @@ private fun inspectIms(context: Context): DiagnosticResult {
                 }
             }
         }
-        report.appendLine("Samsung registration summary:\\n" + status.lines().filter {
+        report.appendLine("Samsung registration summary:\n" + status.lines().filter {
             it.startsWith("SIM slot ") && it.contains(" (")
-        }.joinToString("\\n"))
+        }.joinToString("\n"))
         status.appendLine("Capability flags indicate configuration, not confirmed service use.")
 
     } else {
