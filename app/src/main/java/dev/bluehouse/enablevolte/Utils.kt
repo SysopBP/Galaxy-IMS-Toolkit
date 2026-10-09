@@ -17,6 +17,7 @@ import com.github.kittinunf.fuel.httpGet
 import com.github.kittinunf.fuel.json.responseJson
 import com.github.kittinunf.result.Result
 import rikka.shizuku.Shizuku
+import android.util.Log
 
 enum class ShizukuStatus {
     GRANTED,
@@ -25,12 +26,12 @@ enum class ShizukuStatus {
 }
 
 fun checkShizukuPermission(code: Int): ShizukuStatus =
-    if (Shizuku.getBinder() != null) {
+    if (try { Shizuku.pingBinder() } catch (e: Exception) { Log.w("GalaxyIMS", "Shizuku binder check failed", e); false }) {
         if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
             ShizukuStatus.GRANTED
         } else {
             if (!Shizuku.shouldShowRequestPermissionRationale()) {
-                Shizuku.requestPermission(0)
+                Shizuku.requestPermission(code)
             }
             ShizukuStatus.NOT_GRANTED
         }
@@ -42,7 +43,7 @@ val SubscriptionInfo.uniqueName: String
     get() = "${this.displayName} (SIM ${this.simSlotIndex + 1})"
 
 fun getLatestAppVersion(handler: (String) -> Unit) {
-    "https://api.github.com/repos/kyujin-cho/pixel-volte-patch/releases"
+    "https://api.github.com/repos/SysopBP/Galaxy-IMS-Toolkit/releases"
         .httpGet()
         .header("X-GitHub-Api-Version", "2022-11-28")
         .responseJson { _, _, result ->
