@@ -16,10 +16,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 import javax.xml.parsers.DocumentBuilderFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val IMS_PREFS = "/data/user_de/0/com.sec.imsservice/shared_prefs"
 private val SWITCH_NAMES = listOf("ims", "volte", "vowifi", "mmtel", "rcs", "vilte", "video", "datachannel")
@@ -34,8 +34,10 @@ private fun rootRead(file: String): String {
 }
 
 private fun digest(input: String): String =
-    MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
-        .joinToString("") { "%02x".format(it) }.take(16)
+    MessageDigest.getInstance("SHA-256")
+        .digest(input.toByteArray())
+        .joinToString("") { "%02x".format(it) }
+        .take(16)
 
 private fun switches(xml: String): List<String> {
     val factory = DocumentBuilderFactory.newInstance()
@@ -44,14 +46,17 @@ private fun switches(xml: String): List<String> {
     factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
     val document = factory.newDocumentBuilder().parse(xml.byteInputStream())
     val entries = document.getElementsByTagName("*")
-    return (0 until entries.length).mapNotNull { index ->
+    return (0 until entries.length)
+        .mapNotNull { index ->
         val node = entries.item(index)
         val attributes = node.attributes ?: return@mapNotNull null
         val name = attributes.getNamedItem("name")?.nodeValue ?: return@mapNotNull null
         if (SWITCH_NAMES.none { name.contains(it, ignoreCase = true) }) return@mapNotNull null
         val value = attributes.getNamedItem("value")?.nodeValue ?: node.textContent.orEmpty()
         "$name: ${value.take(40)}"
-    }.distinct().sorted()
+        }
+        .distinct()
+        .sorted()
 }
 
 private fun snapshot(slot: Int): String {
