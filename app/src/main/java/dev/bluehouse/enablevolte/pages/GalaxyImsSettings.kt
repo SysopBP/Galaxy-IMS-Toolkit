@@ -185,6 +185,30 @@ fun GalaxyImsSettings() {
     ) {
         Text("Samsung IMS — Diagnostics v3 (read-only)")
         Text("IMS registration and availability do not prove carrier provisioning.")
+        Text("Live IMS dashboard • refresh to update both SIMs")
+        val snapshot = diagnostic?.text.orEmpty()
+        val modemCount = Regex("Active modem count=([0-9]+)")
+            .find(snapshot)?.groupValues?.getOrNull(1) ?: "Unknown"
+        val slotStates = (0..1).map { slot ->
+            val simState = Regex("mSimState\\[$slot\\]=([^\\n]+)")
+                .find(snapshot)?.groupValues?.getOrNull(1) ?: "Unknown"
+            "SIM ${slot + 1}: $simState"
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(
+                containerColor = Color(0x88303740),
+            ),
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Active modems: $modemCount")
+                slotStates.forEach { Text(it) }
+                Text("VoLTE / VoWiFi / RCS: see registration details below; unknown unless verified")
+                Text("TokenX write permissions: unverified • no carrier changes made")
+            }
+        }
+
         val sections = diagnostic?.text.orEmpty().split(
             Regex("(?=App API subscriptions:|Root:|Privileged SIM inventory|IMS registration \\(source:)"),
         ).filter { it.isNotBlank() }
