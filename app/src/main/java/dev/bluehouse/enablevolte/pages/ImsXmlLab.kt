@@ -262,7 +262,30 @@ fun ImsXmlLab() {
                                     "To roll back an installed module, disable or remove it in KernelSU.\n"
                             ),
                         )
-                        files.forEach { (name, contents) ->
+                        val candidateHashForArchive = if (cscInputXml.isNotEmpty()) {
+                            java.security.MessageDigest.getInstance("SHA-256")
+                                .digest(cscInputXml.toByteArray(Charsets.UTF_8))
+                                .joinToString("") { "%02x".format(it) }
+                        } else "none"
+                        val baselineHashForArchive = if (cscBaselineXml.isNotEmpty()) {
+                            java.security.MessageDigest.getInstance("SHA-256")
+                                .digest(cscBaselineXml.toByteArray(Charsets.UTF_8))
+                                .joinToString("") { "%02x".format(it) }
+                        } else "none"
+                        val audit = "CSC module export audit\\n" +
+                            "Proposed target: " + cscTargetPath + "\\n" +
+                            "Candidate SHA-256: " + candidateHashForArchive + "\\n" +
+                            "Baseline SHA-256: " + baselineHashForArchive + "\\n" +
+                            "Overlay confirmed in UI: " + cscOverlayConfirmed + "\\n" +
+                            "Status: INACTIVE; candidate and baseline are reference-only\\n"
+                        val safeFiles = files + mapOf(
+                            "service.sh" to "#!/system/bin/sh\\n# Inactive by design; no mounts or service restarts.\\nexit 0\\n",
+                            "customize.sh" to "#!/system/bin/sh\\nui_print '- Inactive CSC reference module; no overlay files installed'\\n",
+                            "audit.txt" to audit,
+                            "reference/candidate.xml" to cscInputXml,
+                            "reference/baseline.xml" to cscBaselineXml
+                        )
+                        safeFiles.forEach { (name, contents) ->
                             zip.putNextEntry(java.util.zip.ZipEntry(name))
                             zip.write(contents.toByteArray(Charsets.UTF_8))
                             zip.closeEntry()
