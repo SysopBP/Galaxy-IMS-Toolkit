@@ -45,7 +45,10 @@ fun BooleanPropertyView(
     if (onClick != null) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)) {
             Text(text = label, modifier = Modifier.weight(1F), fontSize = 18.sp)
-            Switch(checked = toggled, enabled = localEnabled, onCheckedChange = { requested ->
+            Switch(
+                checked = toggled,
+                enabled = localEnabled,
+                onCheckedChange = { requested ->
                     try {
                         onClick(requested)
                     } catch (e: SecurityException) {
@@ -53,7 +56,8 @@ fun BooleanPropertyView(
                     } catch (e: IllegalStateException) {
                         Toast.makeText(context, e.message ?: "IMS change unavailable", Toast.LENGTH_LONG).show()
                     }
-                })
+                },
+            )
         }
     } else {
         Column(modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)) {
