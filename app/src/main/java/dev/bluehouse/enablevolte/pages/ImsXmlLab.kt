@@ -303,6 +303,28 @@ fun ImsXmlLab() {
         Text("Carrier CSC profiles: ${carrierCodes.size}")
         Text("Available codes: " + carrierCodes.joinToString(", ").take(400))
         Text("Active carrier not verified; profiles listed are not necessarily enabled.")
+        var showCscCatalog by remember { mutableStateOf(false) }
+        OutlinedButton(onClick = { showCscCatalog = !showCscCatalog }) {
+            Text(if (showCscCatalog) "Hide CSC feature reference" else "CSC feature reference")
+        }
+        if (showCscCatalog) {
+            Text("Reference keys from OneUI_CSC_Features; not verified on this firmware.")
+            val referenceKeys = listOf(
+                "CarrierFeature_RIL_SupportVolte" to "VoLTE capability",
+                "CarrierFeature_Setting_DisableNetworkMode" to "Network mode restrictions",
+                "CarrierFeature_VoiceCall_ConfigOpStyleForMobileNetSetting" to "Mobile network settings",
+                "CarrierFeature_VoiceCall_ConfigOpStyleForVolte" to "VoLTE UI behavior",
+                "CarrierFeature_SystemUI_ConfigOpBrandingForIndicatorIcon" to "Network indicator branding",
+                "CscFeature_Setting_SupportRealTimeNetworkSpeed" to "Network speed display",
+                "CscFeature_VoiceCall_ConfigRecording" to "Call recording configuration",
+                "CscFeature_Setting_EnableMenuBlockCallMsg" to "Call and message blocking menu",
+                "CscFeature_VoiceCall_ConfigOpStyleForImsFunction" to "IMS call presentation"
+            )
+            referenceKeys.forEach { (key, label) ->
+                Text("$label — $key", style = MaterialTheme.typography.labelSmall)
+            }
+            Text("Reference only • no values applied • support varies by CSC and firmware.")
+        }
         Text("Matching copies: " + documents.count { document ->
             when (category) {
                 "IMS" -> document.name.contains("com.sec.imsservice") || document.name.substringAfterLast("/").startsWith("ims")
