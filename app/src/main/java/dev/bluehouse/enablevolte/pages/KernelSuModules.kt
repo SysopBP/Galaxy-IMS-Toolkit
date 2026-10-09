@@ -4,6 +4,9 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -26,6 +30,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -117,13 +123,43 @@ fun KernelSuModules() {
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("KERNEL SUITE", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        Text("KernelSU Modules", style = MaterialTheme.typography.headlineSmall)
+        Text("KernelSU Modules", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Inspect installed modules and install trusted ZIP packages. Installing modules executes privileged scripts.",
             style = MaterialTheme.typography.bodySmall)
         Card(shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Installed modules", style = MaterialTheme.typography.titleMedium)
-                Text(inventory, style = MaterialTheme.typography.bodySmall)
+                        val moduleLines = inventory.lines().filter { it.contains(" | ") }
+                if (moduleLines.isEmpty()) {
+                    Text(inventory, style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text("${moduleLines.size} installed • ${moduleLines.count { it.endsWith("Enabled") }} enabled",
+                        color = Color(0xFFB8C5D6), style = MaterialTheme.typography.labelMedium)
+                    moduleLines.forEach { line ->
+                        val parts = line.split(" | ")
+                        val active = parts.lastOrNull() == "Enabled"
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF242B36)),
+                        ) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(parts.getOrElse(1) { parts[0] }, modifier = Modifier.weight(1f),
+                                        fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(if (active) "● Active" else "○ Off",
+                                        color = if (active) Color(0xFF94DDB6) else Color(0xFFFFBD88),
+                                        style = MaterialTheme.typography.labelSmall)
+                                }
+                                Text(parts[0], color = Color(0xFFB8C5D6),
+                                    style = MaterialTheme.typography.labelSmall)
+                                if (parts.size > 2) Text("Version ${parts[2]}",
+                                    color = Color(0xFFB8C5D6), style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
                 OutlinedButton(onClick = { refresh++ }, enabled = !busy) { Text("Refresh modules") }
             }
         }
@@ -131,7 +167,7 @@ fun KernelSuModules() {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Install / update module", style = MaterialTheme.typography.titleMedium)
                 Button(onClick = { picker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
-                    enabled = !busy) { Text("Select module ZIP") }
+                    enabled = !busy) { Text("Select module ZIP", color = Color.White) }
                 if (selectedName.isNotEmpty()) Text(selectedName, style = MaterialTheme.typography.bodySmall)
                 if (validation.isNotEmpty()) Text(validation, style = MaterialTheme.typography.bodySmall)
                 Button(onClick = { confirm = true },
