@@ -66,6 +66,10 @@ fun ImsXmlLab() {
     var snapshotXml by remember { mutableStateOf("") }
     var snapshotStatus by remember { mutableStateOf("") }
     var backupHashVerified by remember { mutableStateOf(false) }
+    val backupHistory = remember { context.getSharedPreferences("ims_backup_history", 0) }
+    var recentBackup by remember {
+        mutableStateOf(backupHistory.getString("last_backup", "").orEmpty())
+    }
     var expectedBackupHash by remember { mutableStateOf("") }
     var backupVerification by remember { mutableStateOf("") }
 
@@ -122,7 +126,10 @@ fun ImsXmlLab() {
                 val digest = java.security.MessageDigest.getInstance("SHA-256")
                     .digest(snapshotXml.toByteArray(Charsets.UTF_8))
                     .joinToString("") { "%02x".format(it) }
-                backupHashVerified = true
+                backupHashVerified = false
+                val saved = "${uri.lastPathSegment.orEmpty().take(80)} | SHA-256: $digest"
+                backupHistory.edit().putString("last_backup", saved).apply()
+                recentBackup = saved
                 "Original XML snapshot saved. SHA-256: $digest"
             } catch (e: Exception) {
                 backupHashVerified = false
@@ -148,11 +155,14 @@ fun ImsXmlLab() {
                 val actual = java.security.MessageDigest.getInstance("SHA-256")
                     .digest(bytes).joinToString("") { "%02x".format(it) }
                 if (actual == expected) {
+                    backupHashVerified = true
                     "Verified: backup matches the supplied SHA-256 checksum."
                 } else {
+                    backupHashVerified = false
                     "Checksum mismatch: do not use this backup for restoration."
                 }
             } catch (e: Exception) {
+                backupHashVerified = false
                 "Verification failed: ${e.message}"
             }
         }
@@ -196,6 +206,7 @@ fun ImsXmlLab() {
                 }
             }) { Text("Back up selected original XML") }
             if (snapshotStatus.isNotEmpty()) Text(snapshotStatus)
+            if (recentBackup.isNotEmpty()) Text("Most recent backup: $recentBackup")
             OutlinedTextField(
                 value = expectedBackupHash,
                 onValueChange = { expectedBackupHash = it.take(64) },
@@ -208,7 +219,7 @@ fun ImsXmlLab() {
             }) { Text("Verify saved XML backup") }
             if (backupVerification.isNotEmpty()) Text(backupVerification)
 
-            if (backupHashVerified) Text("Backup checksum generated; retain it for later integrity verification.")
+            if (backupHashVerified) Text("Backup checksum verified against selected file.")
             documents.forEachIndexed { index, document ->
                 TextButton(onClick = { selected = index; draftXml = document.originalXml; editMode = false; editorMessage = ""; previewChanges = emptyMap() }) {
                     Text("${if (selected == index) "● " else ""}${document.name} (${document.entries.size} entries)")
