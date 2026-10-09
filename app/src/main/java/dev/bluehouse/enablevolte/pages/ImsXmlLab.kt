@@ -176,6 +176,43 @@ fun ImsXmlLab() {
             }
         }
     }
+    var cscBuilderStatus by remember { mutableStateOf("") }
+    val cscExporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri ->
+        if (uri != null) {
+            cscBuilderStatus = try {
+                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                    java.util.zip.ZipOutputStream(stream).use { zip ->
+                        val files = mapOf(
+                            "module.prop" to (
+                                "id=galaxy_ims_csc_draft\\n" +
+                                    "name=Galaxy IMS CSC Draft\\n" +
+                                    "version=0.1\\nversionCode=1\\n" +
+                                    "author=Galaxy IMS Toolkit\\n" +
+                                    "description=Inactive CSC overlay template; no changes installed\\n"
+                            ),
+                            "README.txt" to (
+                                "CSC MODULE DRAFT - INACTIVE\\n" +
+                                    "No system overlay is included. This package does not modify CSC.\\n" +
+                                    "Verify the correct CSC path and target firmware before adding files.\\n" +
+                                    "Keep an independent backup and recovery plan before installation.\\n" +
+                                    "To roll back an installed module, disable or remove it in KernelSU.\\n"
+                            ),
+                        )
+                        files.forEach { (name, contents) ->
+                            zip.putNextEntry(java.util.zip.ZipEntry(name))
+                            zip.write(contents.toByteArray(Charsets.UTF_8))
+                            zip.closeEntry()
+                        }
+                    }
+                } ?: error("Unable to create module archive")
+                "CSC draft ZIP exported. Inactive template only; no CSC files changed."
+            } catch (e: Exception) {
+                "CSC draft export failed: ${e.javaClass.simpleName}"
+            }
+        }
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         documents = uris.take(12).map { uri -> readImsXml(context, uri) }
         selected = 0
@@ -194,6 +231,12 @@ fun ImsXmlLab() {
         Text(systemBackendStatus, style = MaterialTheme.typography.labelMedium)
         Text(shizukuBackendStatus, style = MaterialTheme.typography.labelMedium)
         Text("Identity checks do not grant IMS write permissions.")
+        Text("CSC Module Builder — safe draft", style = MaterialTheme.typography.titleMedium)
+        Text("Generate an inactive KernelSU module template. No CSC overlay or carrier changes.")
+        OutlinedButton(onClick = {
+            cscExporter.launch("Galaxy_IMS_CSC_Draft.zip")
+        }) { Text("Export CSC module draft ZIP") }
+        if (cscBuilderStatus.isNotEmpty()) Text(cscBuilderStatus)
         OutlinedButton(onClick = { rescan++ }) { Text("Reload device IMS XML") }
         Button(onClick = { picker.launch(arrayOf("text/xml", "application/xml", "text/*", "*/*")) }) {
             Text("Import XML files")
