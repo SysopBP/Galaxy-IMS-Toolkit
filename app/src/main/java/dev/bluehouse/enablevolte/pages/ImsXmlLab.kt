@@ -54,6 +54,8 @@ fun ImsXmlLab() {
     var backendStatus by remember { mutableStateOf("Root backend not checked") }
     var systemBackendStatus by remember { mutableStateOf("TokenX System UID 1000 not checked") }
     var shizukuBackendStatus by remember { mutableStateOf("Shizuku not checked") }
+    var hookStatus by remember { mutableStateOf("Hook heartbeat not received") }
+    var showHookDiagnostics by remember { mutableStateOf(false) }
     var rescan by remember { mutableIntStateOf(0) }
     var filter by remember { mutableStateOf("") }
     var valueType by remember { mutableStateOf("All") }
@@ -314,6 +316,15 @@ fun ImsXmlLab() {
         Text(systemBackendStatus, style = MaterialTheme.typography.labelMedium)
         Text(shizukuBackendStatus, style = MaterialTheme.typography.labelMedium)
         Text("Identity checks do not grant IMS write permissions.")
+        OutlinedButton(onClick = { showHookDiagnostics = !showHookDiagnostics }) {
+            Text(if (showHookDiagnostics) "Hide Xposed diagnostics" else "Xposed / IMS diagnostics")
+        }
+        if (showHookDiagnostics) {
+            Text("LSPosed companion: not connected")
+            Text(hookStatus)
+            Text("Live registration events: unavailable until companion module is installed and scoped.")
+            Text("No system_server hooks or runtime overrides are enabled.")
+        }
         var showCscBuilder by remember { mutableStateOf(false) }
         OutlinedButton(onClick = { showCscBuilder = !showCscBuilder }) {
             Text(if (showCscBuilder) "Hide CSC Module Builder" else "Open CSC Module Builder")
