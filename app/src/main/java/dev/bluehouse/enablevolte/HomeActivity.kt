@@ -93,7 +93,7 @@ fun PixelIMSApp() {
     val carrierModer = CarrierModer(context)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
 
-    var subscriptions by rememberSaveable { mutableStateOf(listOf<SubscriptionInfo>()) }
+    var subscriptions by remember { mutableStateOf(listOf<SubscriptionInfo>()) }
     var navBuilder by remember {
         mutableStateOf<NavGraphBuilder.() -> Unit>({
             composable("home", context.resources.getString(R.string.home)) {
