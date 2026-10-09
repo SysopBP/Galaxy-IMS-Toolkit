@@ -1,5 +1,19 @@
 package dev.bluehouse.enablevolte
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import android.graphics.BitmapFactory
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.telephony.SubscriptionInfo
@@ -7,10 +21,10 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -21,6 +35,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,6 +48,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -50,6 +68,7 @@ import dev.bluehouse.enablevolte.components.OnLifecycleEvent
 import dev.bluehouse.enablevolte.pages.Config
 import dev.bluehouse.enablevolte.pages.DumpedConfig
 import dev.bluehouse.enablevolte.pages.Editor
+import dev.bluehouse.enablevolte.pages.GalaxyImsSettings
 import dev.bluehouse.enablevolte.pages.Home
 import dev.bluehouse.enablevolte.ui.theme.EnableVoLTETheme
 import org.lsposed.hiddenapibypass.HiddenApiBypass
@@ -89,6 +108,23 @@ class HomeActivity : ComponentActivity() {
 @Composable
 fun PixelIMSApp() {
     val context = LocalContext.current
+    val appearancePrefs = remember(context) { context.getSharedPreferences("ims_appearance", 0) }
+    var themeMode by remember { mutableStateOf(appearancePrefs.getString("theme", "oneui") ?: "oneui") }
+    var backgroundMode by remember { mutableStateOf(appearancePrefs.getString("background", "black") ?: "black") }
+    var backgroundUri by remember { mutableStateOf(appearancePrefs.getString("image_uri", "") ?: "") }
+    var showAppearance by remember { mutableStateOf(false) }
+    val backgroundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                backgroundUri = uri.toString()
+                backgroundMode = "photo"
+                appearancePrefs.edit().putString("image_uri", backgroundUri).putString("background", "photo").apply()
+            } catch (e: Exception) {
+                Log.w("GalaxyIMS", "Background selection failed", e)
+            }
+        }
+    }
     val navController = rememberNavController()
     val carrierModer = CarrierModer(context)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
@@ -96,6 +132,9 @@ fun PixelIMSApp() {
     var subscriptions by rememberSaveable { mutableStateOf(listOf<SubscriptionInfo>()) }
     var navBuilder by remember {
         mutableStateOf<NavGraphBuilder.() -> Unit>({
+            composable("ims-research", "Samsung IMS") {
+                    GalaxyImsSettings()
+                }
             composable("home", context.resources.getString(R.string.home)) {
                 Home(navController)
             }
@@ -104,6 +143,7 @@ fun PixelIMSApp() {
 
     fun generateInitialNavBuilder(): (NavGraphBuilder.() -> Unit) =
         {
+            composable("ims-research", "Samsung IMS") { GalaxyImsSettings() }
             composable("home", "Home") {
                 Home(navController)
             }
@@ -111,6 +151,9 @@ fun PixelIMSApp() {
 
     fun generateNavBuilder(): (NavGraphBuilder.() -> Unit) =
         {
+            composable("ims-research", "Samsung IMS") {
+                GalaxyImsSettings()
+            }
             composable("home", context.resources.getString(R.string.home)) {
                 Home(navController)
             }
@@ -161,7 +204,36 @@ fun PixelIMSApp() {
             loadApplication()
         }
     }
+    if (showAppearance) {
+        AlertDialog(
+            onDismissRequest = { showAppearance = false },
+            title = { Text("Appearance") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Theme")
+                    listOf("oneui" to "One UI", "miuix" to "MIUIX inspired", "glass" to "Glass").forEach { (value, label) ->
+                        TextButton(onClick = {
+                            themeMode = value
+                            appearancePrefs.edit().putString("theme", value).apply()
+                        }) { Text(if (themeMode == value) "✓ $label" else label) }
+                    }
+                    Text("Background")
+                    listOf("black" to "Black", "graphite" to "Graphite", "wine" to "Wine red").forEach { (value, label) ->
+                        TextButton(onClick = {
+                            backgroundMode = value
+                            appearancePrefs.edit().putString("background", value).apply()
+                        }) { Text(if (backgroundMode == value) "✓ $label" else label) }
+                    }
+                    TextButton(onClick = { backgroundPicker.launch(arrayOf("image/*")) }) {
+                        Text("Choose background image")
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showAppearance = false }) { Text("Done") } },
+        )
+    }
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {
@@ -183,6 +255,9 @@ fun PixelIMSApp() {
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showAppearance = true }) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Appearance", tint = MaterialTheme.colorScheme.onPrimary)
+                    }
                     if (currentBackStackEntry?.destination?.route == "home") {
                         IconButton(onClick = {
                             loadApplication()
@@ -194,16 +269,29 @@ fun PixelIMSApp() {
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primary),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = if (themeMode == "glass") Color(0x88434B60) else MaterialTheme.colorScheme.primary),
             )
         },
         bottomBar = {
             if (currentBackStackEntry?.destination?.depth?.let { it == 1 } == true) {
-                NavigationBar {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(if (themeMode == "miuix") 36.dp else 30.dp),
+                    color = when (themeMode) {
+                        "glass" -> Color(0x66434B60)
+                        "miuix" -> Color(0xA8323444)
+                        else -> Color(0xB8222229)
+                    },
+                    border = if (themeMode == "glass") androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.23f)) else null,
+                    tonalElevation = 8.dp,
+                    shadowElevation = 12.dp,
+                ) {
+                    NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp) {
                     val currentDestination = currentBackStackEntry?.destination
                     val items =
                         arrayListOf(
                             Screen("home", stringResource(R.string.home), Icons.Filled.Home),
+                            Screen("ims-research", "Samsung IMS", Icons.Filled.Settings),
                         )
                     for (subscription in subscriptions) {
                         items.add(
@@ -218,6 +306,17 @@ fun PixelIMSApp() {
                                 Text(screen.title)
                             },
                             selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Color.White,
+                                selectedTextColor = Color.White,
+                                unselectedIconColor = Color(0xFFB8B8BF),
+                                unselectedTextColor = Color(0xFFB8B8BF),
+                                indicatorColor = when (themeMode) {
+                                    "glass" -> Color(0x668FA7CF)
+                                    "miuix" -> Color(0x996E8DFF)
+                                    else -> Color(0x885A5A65)
+                                },
+                            ),
                             onClick = {
                                 navController.navigate(screen.route) {
                                     // Pop up to the start destination of the graph to
@@ -235,11 +334,32 @@ fun PixelIMSApp() {
                             },
                         )
                     }
+                    }
                 }
             }
         },
     ) { innerPadding ->
-        NavHost(navController, startDestination = "home", Modifier.padding(innerPadding), builder = navBuilder)
+        Box(Modifier.fillMaxSize().background(
+            when (backgroundMode) {
+                "graphite" -> Color(0xFF22252C)
+                "wine" -> Color(0xFF240D1B)
+                else -> Color.Black
+            },
+        )) {
+            if (backgroundMode == "photo" && backgroundUri.isNotEmpty()) {
+                val bitmap = remember(backgroundUri) {
+                    try {
+                        context.contentResolver.openInputStream(Uri.parse(backgroundUri))?.use {
+                            BitmapFactory.decodeStream(it)?.asImageBitmap()
+                        }
+                    } catch (_: Exception) { null }
+                }
+                if (bitmap != null) {
+                    Image(bitmap, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = 0.35f)
+                }
+            }
+            NavHost(navController, startDestination = "home", Modifier.padding(innerPadding), builder = navBuilder)
+        }
     }
 }
 
