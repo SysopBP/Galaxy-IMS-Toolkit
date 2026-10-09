@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -73,6 +74,7 @@ import dev.bluehouse.enablevolte.pages.Editor
 import dev.bluehouse.enablevolte.pages.GalaxyImsSettings
 import dev.bluehouse.enablevolte.pages.Home
 import dev.bluehouse.enablevolte.pages.ImsXmlLab
+import dev.bluehouse.enablevolte.pages.KernelSuModules
 import dev.bluehouse.enablevolte.ui.theme.EnableVoLTETheme
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 import rikka.shizuku.Shizuku
@@ -303,6 +305,7 @@ fun PixelIMSApp() {
                             Screen("home", stringResource(R.string.home), Icons.Filled.Home),
                             Screen("ims-research", "IMS", Icons.Filled.Settings),
                             Screen("xml_lab", "XML Lab", Icons.Filled.Refresh),
+                            Screen("ksu_modules", "Modules", Icons.Filled.Build),
                         )
                     for (subscription in subscriptions) {
                         items.add(
@@ -373,6 +376,7 @@ fun PixelIMSApp() {
                 composable("home", "Home") { Home(navController) }
                 composable("ims-research", "Samsung IMS") { GalaxyImsSettings() }
                 composable("xml_lab", "IMS XML Lab") { ImsXmlLab() }
+                composable("ksu_modules", "KernelSU Modules") { KernelSuModules() }
                 for (subscription in subscriptions) {
                     navigation(startDestination = "config${subscription.subscriptionId}", route = "config${subscription.subscriptionId}root") {
                         composable("config${subscription.subscriptionId}", "SIM config") { Config(navController, subscription.subscriptionId) }
