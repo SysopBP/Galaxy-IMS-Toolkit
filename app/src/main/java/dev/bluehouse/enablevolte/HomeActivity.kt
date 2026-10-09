@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.graphics.asImageBitmap
@@ -257,7 +256,7 @@ fun PixelIMSApp() {
                 },
                 actions = {
                     IconButton(onClick = { showAppearance = true }) {
-                        Icon(Icons.Filled.Palette, contentDescription = "Appearance", tint = MaterialTheme.colorScheme.onPrimary)
+                        Icon(Icons.Filled.Settings, contentDescription = "Appearance", tint = MaterialTheme.colorScheme.onPrimary)
                     }
                     if (currentBackStackEntry?.destination?.route == "home") {
                         IconButton(onClick = {
