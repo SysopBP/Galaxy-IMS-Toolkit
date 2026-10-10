@@ -11,7 +11,12 @@ import android.os.SystemClock
 /** Only this app and Samsung's installed IMS process can exchange observer events. */
 class ObserverProvider : ContentProvider() {
     override fun onCreate() = true
-    override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
+
+    override fun call(
+        method: String,
+        arg: String?,
+        extras: Bundle?,
+    ): Bundle {
         val c = requireNotNull(context)
         val uid = Binder.getCallingUid()
         val packages = c.packageManager.getPackagesForUid(uid).orEmpty()
@@ -23,12 +28,27 @@ class ObserverProvider : ContentProvider() {
         val data = extras ?: return Bundle()
         if (method == "heartbeat") {
             val state = data.getString("state").orEmpty()
-            require(state in setOf("Hook loaded", "Observer active", "Unsupported firmware signatures", "Observer error", "Waiting for IMS classes"))
-            prefs.edit().putLong("heartbeat", SystemClock.elapsedRealtime()).putString("state", state).putInt("boot", android.provider.Settings.Global.getInt(c.contentResolver, "boot_count", -1)).apply()
+            require(
+                state in
+                    setOf("Hook loaded", "Observer active", "Unsupported firmware signatures", "Observer error", "Waiting for IMS classes"),
+            )
+            prefs
+                .edit()
+                .putLong(
+                    "heartbeat",
+                    SystemClock.elapsedRealtime(),
+                ).putString("state", state)
+                .putInt(
+                    "boot",
+                    android.provider.Settings.Global
+                        .getInt(c.contentResolver, "boot_count", -1),
+                ).apply()
         } else if (method == "registration") {
             val slot = data.getInt("slot", -1)
             require(slot in 0..1)
-            prefs.edit().putLong("event_$slot", SystemClock.elapsedRealtime())
+            prefs
+                .edit()
+                .putLong("event_$slot", SystemClock.elapsedRealtime())
                 .apply { if (data.containsKey("volte")) putBoolean("volte_$slot", data.getBoolean("volte")) }
                 .putBoolean("rcs_$slot", data.getBoolean("rcs"))
                 .apply {
@@ -37,9 +57,32 @@ class ObserverProvider : ContentProvider() {
         }
         return Bundle()
     }
-    override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor? = null
+
+    override fun query(
+        uri: Uri,
+        projection: Array<out String>?,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+        sortOrder: String?,
+    ): Cursor? = null
+
     override fun getType(uri: Uri): String? = null
-    override fun insert(uri: Uri, values: ContentValues?): Uri? = null
-    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
-    override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
+
+    override fun insert(
+        uri: Uri,
+        values: ContentValues?,
+    ): Uri? = null
+
+    override fun delete(
+        uri: Uri,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+    ): Int = 0
+
+    override fun update(
+        uri: Uri,
+        values: ContentValues?,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+    ): Int = 0
 }

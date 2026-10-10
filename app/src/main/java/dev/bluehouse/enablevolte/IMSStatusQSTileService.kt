@@ -21,13 +21,13 @@ open class IMSStatusQSTileService(
         val carrierModer = CarrierModer(this.applicationContext)
 
         try {
-            if (checkShizukuPermission(0) == ShizukuStatus.GRANTED && carrierModer.deviceSupportsIMS) {
+            if ((checkShizukuPermission(0) == ShizukuStatus.GRANTED || RootBackend.needed()) && carrierModer.deviceSupportsIMS) {
                 val sub =
                     carrierModer.getActiveSubscriptionInfoForSimSlotIndex(this.simSlotIndex)
                         ?: return null
                 return SubscriptionModer(this.applicationContext, sub.subscriptionId)
             }
-        } catch (_: IllegalStateException) {
+        } catch (_: Exception) {
         }
         return null
     }
@@ -40,7 +40,7 @@ open class IMSStatusQSTileService(
         val moder = this.moder ?: return null
         try {
             return moder.isIMSRegistered
-        } catch (_: IllegalStateException) {
+        } catch (_: Exception) {
         }
         return null
     }
@@ -73,12 +73,20 @@ open class IMSStatusQSTileService(
 
     override fun onStartListening() {
         super.onStartListening()
-        this.refreshStatus()
+        Thread {
+            RootBackend.probe()
+            refreshStatus()
+        }.start()
     }
 
     override fun onClick() {
         super.onClick()
-        moder?.restartIMSRegistration()
-        this.refreshStatus()
+        Thread {
+            runCatching {
+                RootBackend.probe()
+                CarrierWrites.atomic { moder?.restartIMSRegistration() }
+            }
+            refreshStatus()
+        }.start()
     }
 }

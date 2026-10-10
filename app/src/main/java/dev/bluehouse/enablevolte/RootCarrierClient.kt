@@ -22,34 +22,54 @@ object RootCarrierClient {
             val sub = ISub.Stub.asInterface(ServiceManager.getService("isub"))
             when (action) {
                 "subscriptions" -> {
-                    val values = try { sub.getActiveSubscriptionInfoList(null, null, true) } catch (_: NoSuchMethodError) {
-                        sub.javaClass.getMethod("getActiveSubscriptionInfoList", String::class.java, String::class.java)
-                            .invoke(sub, null, null) as? List<SubscriptionInfo>
-                    }
+                    val values =
+                        try {
+                            sub.getActiveSubscriptionInfoList(null, null, true)
+                        } catch (_: NoSuchMethodError) {
+                            sub.javaClass
+                                .getMethod("getActiveSubscriptionInfoList", String::class.java, String::class.java)
+                                .invoke(sub, null, null) as? List<SubscriptionInfo>
+                        }
                     val parcel = Parcel.obtain()
-                    try { parcel.writeTypedList(values.orEmpty()); printParcel(parcel) } finally { parcel.recycle() }
+                    try {
+                        parcel.writeTypedList(values.orEmpty())
+                        printParcel(parcel)
+                    } finally {
+                        parcel.recycle()
+                    }
                 }
                 "read" -> {
-                    val values = try {
-                        loader.getConfigForSubIdWithFeature(id, loader.defaultCarrierServicePackageName, "")
-                    } catch (_: NoSuchMethodError) {
-                        loader.getConfigForSubId(id, loader.defaultCarrierServicePackageName)
-                    }
+                    val values =
+                        try {
+                            loader.getConfigForSubIdWithFeature(id, loader.defaultCarrierServicePackageName, "")
+                        } catch (_: NoSuchMethodError) {
+                            loader.getConfigForSubId(id, loader.defaultCarrierServicePackageName)
+                        }
                     val parcel = Parcel.obtain()
-                    try { parcel.writePersistableBundle(values); printParcel(parcel) } finally { parcel.recycle() }
+                    try {
+                        parcel.writePersistableBundle(values)
+                        printParcel(parcel)
+                    } finally {
+                        parcel.recycle()
+                    }
                 }
                 "write", "clear" -> {
                     val values = if (action == "clear") null else decode(args[2])
-                    try { loader.overrideConfig(id, values, true) }
-                    catch (e: SecurityException) {
-                        if (e.message?.contains("persistent=true") == true) loader.overrideConfig(id, values, false)
-                        else throw e
+                    try {
+                        loader.overrideConfig(id, values, true)
+                    } catch (e: SecurityException) {
+                        if (e.message?.contains("persistent=true") == true) {
+                            loader.overrideConfig(id, values, false)
+                        } else {
+                            throw e
+                        }
                     }
                     println("IMS_ROOT_OK")
                 }
                 "reset" -> {
                     val phone = ITelephony.Stub.asInterface(ServiceManager.getService("phone"))
-                    phone.resetIms(sub.getSlotIndex(id)); println("IMS_ROOT_OK")
+                    phone.resetIms(sub.getSlotIndex(id))
+                    println("IMS_ROOT_OK")
                 }
                 "registered" -> {
                     val phone = ITelephony.Stub.asInterface(ServiceManager.getService("phone"))
@@ -62,15 +82,20 @@ object RootCarrierClient {
             kotlin.system.exitProcess(1)
         }
     }
+
     private fun printParcel(parcel: Parcel) {
         println("IMS_ROOT_DATA=" + Base64.encodeToString(parcel.marshall(), Base64.NO_WRAP))
     }
+
     private fun decode(encoded: String): PersistableBundle {
         val bytes = Base64.decode(encoded, Base64.DEFAULT)
         val parcel = Parcel.obtain()
         return try {
-            parcel.unmarshall(bytes, 0, bytes.size); parcel.setDataPosition(0)
+            parcel.unmarshall(bytes, 0, bytes.size)
+            parcel.setDataPosition(0)
             parcel.readPersistableBundle(RootCarrierClient::class.java.classLoader) ?: error("Empty write")
-        } finally { parcel.recycle() }
+        } finally {
+            parcel.recycle()
+        }
     }
 }

@@ -8,11 +8,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +37,8 @@ fun BooleanPropertyView(
     onClick: ((Boolean) -> Unit)? = null,
 ) {
     val perform = rememberPrivilegedAction()
-    val writing by dev.bluehouse.enablevolte.CarrierWrites.active.collectAsState()
+    val writing by dev.bluehouse.enablevolte.CarrierWrites.active
+        .collectAsState()
     val localEnabled = enabled && Build.VERSION.SDK_INT >= minSdk
 
     if (toggled == null) {

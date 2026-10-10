@@ -24,9 +24,12 @@ class BrokerInstrumentation : Instrumentation() {
         am.startDelegateShellPermissionIdentity(Os.getuid(), null)
         try {
             val configurationManager = this.context.getSystemService(CarrierConfigManager::class.java)
-            val values = Bundle(arguments).apply {
-                remove("moder_subId"); remove("moder_clear"); remove("moder_result")
-            }
+            val values =
+                Bundle(arguments).apply {
+                    remove("moder_subId")
+                    remove("moder_clear")
+                    remove("moder_result")
+                }
             val overrideValues = toPersistableBundle(values)
 
             try {

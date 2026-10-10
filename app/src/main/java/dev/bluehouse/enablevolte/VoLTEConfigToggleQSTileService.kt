@@ -3,8 +3,8 @@ package dev.bluehouse.enablevolte
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import android.util.Log
 import android.telephony.CarrierConfigManager
+import android.util.Log
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 import java.lang.IllegalStateException
 
@@ -27,14 +27,14 @@ open class VoLTEConfigToggleQSTileService(
         val carrierModer = CarrierModer(this.applicationContext)
 
         try {
-            if (checkShizukuPermission(0) == ShizukuStatus.GRANTED && carrierModer.deviceSupportsIMS) {
+            if ((checkShizukuPermission(0) == ShizukuStatus.GRANTED || RootBackend.needed()) && carrierModer.deviceSupportsIMS) {
                 carrierModer.subscriptions
                 val sub =
                     carrierModer.getActiveSubscriptionInfoForSimSlotIndex(this.simSlotIndex)
                         ?: return null
                 return SubscriptionModer(this.applicationContext, sub.subscriptionId)
             }
-        } catch (_: IllegalStateException) {
+        } catch (_: Exception) {
         }
         return null
     }
@@ -48,7 +48,7 @@ open class VoLTEConfigToggleQSTileService(
         val moder = this.moder ?: return null
         try {
             return moder.isVoLteConfigEnabled
-        } catch (_: IllegalStateException) {
+        } catch (_: Exception) {
         }
         return null
     }
@@ -86,8 +86,8 @@ open class VoLTEConfigToggleQSTileService(
         val volteEnabled = this.volteEnabled ?: return
         try {
             CarrierWrites.atomic {
-            moder.updateCarrierConfig(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL, !volteEnabled)
-            moder.restartIMSRegistration()
+                moder.updateCarrierConfig(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL, !volteEnabled)
+                moder.restartIMSRegistration()
             }
         } catch (e: SecurityException) {
             Log.e(TAG, "System permission denied for IMS tile", e)

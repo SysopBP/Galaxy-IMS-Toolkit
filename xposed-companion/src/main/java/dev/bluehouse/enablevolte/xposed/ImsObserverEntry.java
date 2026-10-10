@@ -19,7 +19,8 @@ public final class ImsObserverEntry implements IXposedHookLoadPackage {
     private static final Uri PROVIDER = Uri.parse("content://com.sysopbp.galaxyims.observer");
     private Context context;
     private String state = "Waiting for IMS classes";
-    private long lastEvent;
+    private final String[] lastState = new String[2];
+    private final long[] lastEvent = new long[2];
     private int attempts;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -84,6 +85,11 @@ public final class ImsObserverEntry implements IXposedHookLoadPackage {
                                 data.putBoolean("volte", registered && services.contains("mmtel") && (rat == 13 || rat == 20));
                                 data.putBoolean("vowifi", registered && services.contains("mmtel") && rat == 18);
                             } catch (Throwable ignored) { /* RAT unknown: do not infer Wi-Fi calling. */ }
+                            String fingerprint = data.toString();
+                            long now = android.os.SystemClock.elapsedRealtime();
+                            if (fingerprint.equals(lastState[slot]) && now - lastEvent[slot] < 1000) return;
+                            lastState[slot] = fingerprint;
+                            lastEvent[slot] = now;
                             report("registration", data);
                         } catch (Throwable ignored) { state = "Observer error"; }
                     }

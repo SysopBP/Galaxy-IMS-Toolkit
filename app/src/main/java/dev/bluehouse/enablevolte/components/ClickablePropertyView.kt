@@ -3,9 +3,8 @@ package dev.bluehouse.enablevolte.components
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -13,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,8 +41,12 @@ fun ClickablePropertyView(
     }
     if (onClick != null) {
         Surface(onClick = {
-            try { onClick() } catch (e: Exception) {
-                android.widget.Toast.makeText(context, e.message ?: "Operation failed", android.widget.Toast.LENGTH_LONG).show()
+            try {
+                onClick()
+            } catch (e: Exception) {
+                android.widget.Toast
+                    .makeText(context, e.message ?: "Operation failed", android.widget.Toast.LENGTH_LONG)
+                    .show()
             }
         }, modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(18.dp), color = Color(0x88303740)) {
             Column(modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)) {

@@ -15,12 +15,12 @@ import android.telephony.CarrierConfigManager
 import android.telephony.SubscriptionInfo
 import android.telephony.TelephonyFrameworkInitializer
 import android.util.Log
-import rikka.shizuku.Shizuku
 import androidx.annotation.RequiresApi
 import com.android.internal.telephony.ICarrierConfigLoader
 import com.android.internal.telephony.IPhoneSubInfo
 import com.android.internal.telephony.ISub
 import com.android.internal.telephony.ITelephony
+import rikka.shizuku.Shizuku
 import rikka.shizuku.ShizukuBinderWrapper
 import rikka.shizuku.SystemServiceHelper
 import java.text.SimpleDateFormat
@@ -110,6 +110,7 @@ class CarrierModer(
     private val context: Context,
 ) : Moder() {
     fun getActiveSubscriptionInfoForSimSlotIndex(index: Int): SubscriptionInfo? {
+        if (RootBackend.needed()) return RootBackend.subscriptions(context).firstOrNull { it.simSlotIndex == index }
         val sub = this.loadCachedInterface { sub }
         return try {
             sub.getActiveSubscriptionInfoForSimSlotIndex(index, null, null)
@@ -184,12 +185,16 @@ class SubscriptionModer(
     private fun overrideConfigUsingBroker(bundle: Bundle?) {
         val completed = java.util.concurrent.CountDownLatch(1)
         var failure: String? = null
-        val receiver = object : android.os.ResultReceiver(null) {
-            override fun onReceiveResult(code: Int, data: Bundle?) {
-                if (code != 0) failure = data?.getString("error") ?: "Carrier write failed"
-                completed.countDown()
+        val receiver =
+            object : android.os.ResultReceiver(null) {
+                override fun onReceiveResult(
+                    code: Int,
+                    data: Bundle?,
+                ) {
+                    if (code != 0) failure = data?.getString("error") ?: "Carrier write failed"
+                    completed.countDown()
+                }
             }
-        }
         val am =
             IActivityManager.Stub.asInterface(
                 ShizukuBinderWrapper(
@@ -206,16 +211,17 @@ class SubscriptionModer(
         arg.putInt("moder_subId", subscriptionId)
         arg.putParcelable("moder_result", receiver)
 
-        val launched = am.startInstrumentation(
-            ComponentName(context, Class.forName("dev.bluehouse.enablevolte.BrokerInstrumentation")),
-            null,
-            8,
-            arg,
-            null,
-            UiAutomationConnection(),
-            0,
-            null,
-        )
+        val launched =
+            am.startInstrumentation(
+                ComponentName(context, Class.forName("dev.bluehouse.enablevolte.BrokerInstrumentation")),
+                null,
+                8,
+                arg,
+                null,
+                UiAutomationConnection(),
+                0,
+                null,
+            )
         check(launched) { "Carrier broker could not start" }
         check(completed.await(15, java.util.concurrent.TimeUnit.SECONDS)) {
             "Carrier write timed out; refresh values before retrying"
@@ -228,18 +234,19 @@ class SubscriptionModer(
      * eligible, but firmware permission checks and readback decide success.
      */
     private fun requireSystemWriteBackend() {
-        val uid = try {
-            if (!Shizuku.pingBinder() ||
-                Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
+        val uid =
+            try {
+                if (!Shizuku.pingBinder() ||
+                    Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    -1
+                } else {
+                    Shizuku.getUid()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Cannot verify system binder identity", e)
                 -1
-            } else {
-                Shizuku.getUid()
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Cannot verify system binder identity", e)
-            -1
-        }
         if (uid != android.os.Process.SYSTEM_UID && uid != 0 && !RootBackend.available) {
             throw IllegalStateException(
                 "Carrier write needs an authorized Root or System binder; detected UID $uid. " +
@@ -347,9 +354,12 @@ class SubscriptionModer(
     }
 
     fun readConfig(): PersistableBundle =
-        if (RootBackend.needed()) RootBackend.read(context, subscriptionId)
-        else getConfigForSubId(loadCachedInterface { carrierConfigLoader }, subscriptionId)
-            ?: throw IllegalStateException("Carrier config unavailable")
+        if (RootBackend.needed()) {
+            RootBackend.read(context, subscriptionId)
+        } else {
+            getConfigForSubId(loadCachedInterface { carrierConfigLoader }, subscriptionId)
+                ?: throw IllegalStateException("Carrier config unavailable")
+        }
 
     internal fun applyVerified(values: Bundle) {
         requireSystemWriteBackend()
@@ -360,15 +370,22 @@ class SubscriptionModer(
             val actual = readConfig()
             if (expected.keySet().all { key ->
                     sameValue(expected.get(key), actual.get(key))
-                }) return
+                }
+            ) {
+                return
+            }
             Thread.sleep(100)
         }
         throw IllegalStateException("Carrier write completed but readback differs; refresh before retrying")
     }
 
-    private fun sameValue(left: Any?, right: Any?): Boolean {
-        if (left is PersistableBundle && right is PersistableBundle)
+    private fun sameValue(
+        left: Any?,
+        right: Any?,
+    ): Boolean {
+        if (left is PersistableBundle && right is PersistableBundle) {
             return left.keySet() == right.keySet() && left.keySet().all { sameValue(left.get(it), right.get(it)) }
+        }
         return java.util.Objects.deepEquals(left, right)
     }
 
@@ -377,15 +394,20 @@ class SubscriptionModer(
     fun restoreValues(values: PersistableBundle) {
         val current = readConfig()
         require(values.keySet().all { it in current.keySet() }) { "Snapshot has unsupported carrier keys" }
-        applyVerified(Bundle().apply {
-            values.keySet().forEach { key -> putIntoBundle(this, key, values.get(key)) }
-        })
+        applyVerified(
+            Bundle().apply {
+                values.keySet().forEach { key -> putIntoBundle(this, key, values.get(key)) }
+            },
+        )
     }
 
     fun restartIMSRegistration() {
         if (CarrierWrites.restart(this)) return
         requireSystemWriteBackend()
-        if (RootBackend.needed()) { RootBackend.reset(context, subscriptionId); return }
+        if (RootBackend.needed()) {
+            RootBackend.reset(context, subscriptionId)
+            return
+        }
         val telephony = this.loadCachedInterface { telephony }
         val sub = this.loadCachedInterface { sub }
         telephony.resetIms(sub.getSlotIndex(this.subscriptionId))
@@ -492,9 +514,15 @@ class SubscriptionModer(
     }
 
     val simSlotIndex: Int
-        get() = if (RootBackend.needed()) RootBackend.subscriptions(context)
-            .firstOrNull { it.subscriptionId == subscriptionId }?.simSlotIndex ?: -1
-        else this.loadCachedInterface { sub }.getSlotIndex(subscriptionId)
+        get() =
+            if (RootBackend.needed()) {
+                RootBackend
+                    .subscriptions(context)
+                    .firstOrNull { it.subscriptionId == subscriptionId }
+                    ?.simSlotIndex ?: -1
+            } else {
+                this.loadCachedInterface { sub }.getSlotIndex(subscriptionId)
+            }
 
     val isVoLteConfigEnabled: Boolean
         get() = this.getBooleanValue(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL)
@@ -540,9 +568,16 @@ class SubscriptionModer(
         get() = this.getIntValue(CarrierConfigManager.KEY_WFC_SPN_FORMAT_IDX_INT)
 
     val carrierName: String?
-        get() = if (RootBackend.needed()) RootBackend.subscriptions(context)
-            .firstOrNull { it.subscriptionId == subscriptionId }?.carrierName?.toString()
-        else this.loadCachedInterface { telephony }.getSubscriptionCarrierName(this.subscriptionId)
+        get() =
+            if (RootBackend.needed()) {
+                RootBackend
+                    .subscriptions(context)
+                    .firstOrNull { it.subscriptionId == subscriptionId }
+                    ?.carrierName
+                    ?.toString()
+            } else {
+                this.loadCachedInterface { telephony }.getSubscriptionCarrierName(this.subscriptionId)
+            }
 
     val showVoWifiIcon: Boolean
         get() = this.getBooleanValue(CarrierConfigManager.KEY_SHOW_WIFI_CALLING_ICON_IN_STATUS_BAR_BOOL)

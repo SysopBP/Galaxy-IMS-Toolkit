@@ -1,7 +1,5 @@
 package dev.bluehouse.enablevolte.pages
 
-import kotlinx.coroutines.launch
-
 import android.telephony.CarrierConfigManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -65,6 +63,7 @@ import dev.bluehouse.enablevolte.components.FiniteLoadingDialog
 import dev.bluehouse.enablevolte.components.InfiniteLoadingDialog
 import dev.bluehouse.enablevolte.components.ValueType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.lang.reflect.Field
 
@@ -563,11 +562,19 @@ fun Editor(subId: Int) {
                                 scope.launch {
                                     try {
                                         withContext(Dispatchers.IO) {
-                                            dev.bluehouse.enablevolte.CarrierWrites.atomic { updateRow(data) }
+                                            dev.bluehouse.enablevolte.CarrierWrites
+                                                .atomic { updateRow(data) }
                                         }
                                     } catch (e: Exception) {
-                                        android.widget.Toast.makeText(context, e.message ?: "Write failed", android.widget.Toast.LENGTH_LONG).show()
-                                    } finally { saving = false }
+                                        android.widget.Toast
+                                            .makeText(
+                                                context,
+                                                e.message ?: "Write failed",
+                                                android.widget.Toast.LENGTH_LONG,
+                                            ).show()
+                                    } finally {
+                                        saving = false
+                                    }
                                 }
                             },
                         ) { Text(stringResource(R.string.confirm)) }

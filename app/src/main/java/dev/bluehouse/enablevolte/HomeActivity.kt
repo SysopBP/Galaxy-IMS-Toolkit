@@ -1,51 +1,45 @@
 package dev.bluehouse.enablevolte
 
-import kotlinx.coroutines.launch
-
-import dev.bluehouse.enablevolte.pages.SamsungImsProfiles
-
 import android.content.Intent
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import android.graphics.BitmapFactory
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
 import android.telephony.SubscriptionInfo
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Build
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
-import androidx.compose.foundation.layout.height
-import androidx.compose.ui.unit.sp
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -56,12 +50,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -79,7 +75,9 @@ import dev.bluehouse.enablevolte.pages.GalaxyImsSettings
 import dev.bluehouse.enablevolte.pages.Home
 import dev.bluehouse.enablevolte.pages.ImsXmlLab
 import dev.bluehouse.enablevolte.pages.KernelSuModules
+import dev.bluehouse.enablevolte.pages.SamsungImsProfiles
 import dev.bluehouse.enablevolte.ui.theme.EnableVoLTETheme
+import kotlinx.coroutines.launch
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 import rikka.shizuku.Shizuku
 import java.lang.IllegalStateException
@@ -123,18 +121,23 @@ fun PixelIMSApp() {
     var photoOpacity by remember { mutableStateOf(appearancePrefs.getFloat("photo_opacity", 0.35f)) }
     var backgroundUri by remember { mutableStateOf(appearancePrefs.getString("image_uri", "") ?: "") }
     var showAppearance by remember { mutableStateOf(false) }
-    val backgroundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                backgroundUri = uri.toString()
-                backgroundMode = "photo"
-                appearancePrefs.edit().putString("image_uri", backgroundUri).putString("background", "photo").apply()
-            } catch (e: Exception) {
-                Log.w("GalaxyIMS", "Background selection failed", e)
+    val backgroundPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                try {
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    backgroundUri = uri.toString()
+                    backgroundMode = "photo"
+                    appearancePrefs
+                        .edit()
+                        .putString("image_uri", backgroundUri)
+                        .putString("background", "photo")
+                        .apply()
+                } catch (e: Exception) {
+                    Log.w("GalaxyIMS", "Background selection failed", e)
+                }
             }
         }
-    }
     val navController = rememberNavController()
     val carrierModer = CarrierModer(context)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
@@ -142,42 +145,60 @@ fun PixelIMSApp() {
     var subscriptions by remember { mutableStateOf(listOf<SubscriptionInfo>()) }
     val appScope = androidx.compose.runtime.rememberCoroutineScope()
     var loadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
     fun loadApplication() {
         loadJob?.cancel()
-        loadJob = appScope.launch {
-            val loaded = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                runCatching {
-                    RootBackend.probe()
-                    if (checkShizukuPermission(0) == ShizukuStatus.GRANTED || RootBackend.needed())
-                        carrierModer.subscriptions else emptyList()
-                }.getOrDefault(emptyList())
+        loadJob =
+            appScope.launch {
+                val loaded =
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching {
+                            RootBackend.probe()
+                            if (checkShizukuPermission(0) == ShizukuStatus.GRANTED || RootBackend.needed()) {
+                                carrierModer.subscriptions
+                            } else {
+                                emptyList()
+                            }
+                        }.getOrDefault(emptyList())
+                    }
+                subscriptions = loaded
             }
-            subscriptions = loaded
-        }
     }
 
     androidx.compose.runtime.DisposableEffect(Unit) {
-        val received = Shizuku.OnBinderReceivedListener {
-            dev.bluehouse.enablevolte.InterfaceCache.cache.clear()
-            runCatching { loadApplication() }
-        }
-        val dead = Shizuku.OnBinderDeadListener {
-            dev.bluehouse.enablevolte.InterfaceCache.cache.clear()
-            subscriptions = emptyList()
-        }
-        val permission = Shizuku.OnRequestPermissionResultListener { _, _ -> runCatching { loadApplication() } }
-        val simChanged = object : android.content.BroadcastReceiver() {
-            override fun onReceive(c: android.content.Context, intent: Intent) {
-                dev.bluehouse.enablevolte.InterfaceCache.cache.clear()
+        val received =
+            Shizuku.OnBinderReceivedListener {
+                dev.bluehouse.enablevolte.InterfaceCache.cache
+                    .clear()
                 runCatching { loadApplication() }
             }
-        }
+        val dead =
+            Shizuku.OnBinderDeadListener {
+                dev.bluehouse.enablevolte.InterfaceCache.cache
+                    .clear()
+                subscriptions = emptyList()
+            }
+        val permission = Shizuku.OnRequestPermissionResultListener { _, _ -> runCatching { loadApplication() } }
+        val simChanged =
+            object : android.content.BroadcastReceiver() {
+                override fun onReceive(
+                    c: android.content.Context,
+                    intent: Intent,
+                ) {
+                    dev.bluehouse.enablevolte.InterfaceCache.cache
+                        .clear()
+                    runCatching { loadApplication() }
+                }
+            }
         Shizuku.addBinderReceivedListenerSticky(received)
         Shizuku.addBinderDeadListener(dead)
         Shizuku.addRequestPermissionResultListener(permission)
-        androidx.core.content.ContextCompat.registerReceiver(context, simChanged,
+        androidx.core.content.ContextCompat.registerReceiver(
+            context,
+            simChanged,
             android.content.IntentFilter("android.intent.action.ACTION_SUBINFO_RECORD_UPDATED"),
-            androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
+            androidx.core.content.ContextCompat.RECEIVER_EXPORTED,
+        )
         onDispose {
             Shizuku.removeBinderReceivedListener(received)
             Shizuku.removeBinderDeadListener(dead)
@@ -202,7 +223,12 @@ fun PixelIMSApp() {
                         appearancePrefs.edit().putFloat("photo_opacity", it).apply()
                     }, valueRange = 0f..1f)
                     Text("Theme")
-                    listOf("oneui" to "One UI", "miuix" to "MIUIX inspired", "glass" to "Glass", "material" to "Material").forEach { (value, label) ->
+                    listOf(
+                        "oneui" to "One UI",
+                        "miuix" to "MIUIX style",
+                        "glass" to "Glass",
+                        "material" to "Material",
+                    ).forEach { (value, label) ->
                         TextButton(onClick = {
                             themeMode = value
                             appearancePrefs.edit().putString("theme", value).apply()
@@ -260,7 +286,17 @@ fun PixelIMSApp() {
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = if (themeMode == "glass") Color(0x88434B60) else MaterialTheme.colorScheme.primary),
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor =
+                            if (themeMode ==
+                                "glass"
+                            ) {
+                                Color(0x88434B60)
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
+                    ),
             )
         },
         bottomBar = {
@@ -268,12 +304,20 @@ fun PixelIMSApp() {
                 Surface(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
                     shape = RoundedCornerShape(if (themeMode == "miuix") 36.dp else 30.dp),
-                    color = when (themeMode) {
-                        "glass" -> Color(0x66434B60)
-                        "miuix" -> Color(0xA8323444)
-                        else -> Color(0xB8222229)
-                    },
-                    border = if (themeMode == "glass") androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.23f)) else null,
+                    color =
+                        when (themeMode) {
+                            "glass" -> Color(0x66434B60)
+                            "miuix" -> Color(0xA8323444)
+                            else -> Color(0xB8222229)
+                        },
+                    border =
+                        if (themeMode ==
+                            "glass"
+                        ) {
+                            androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.23f))
+                        } else {
+                            null
+                        },
                     tonalElevation = 8.dp,
                     shadowElevation = 12.dp,
                 ) {
@@ -282,86 +326,102 @@ fun PixelIMSApp() {
                         containerColor = Color.Transparent,
                         tonalElevation = 0.dp,
                     ) {
-                    val currentDestination = currentBackStackEntry?.destination
-                    val items =
-                        arrayListOf(
-                            Screen("home", stringResource(R.string.home), Icons.Filled.Home),
-                            Screen("ims-research", "IMS", Icons.Filled.Settings),
-                            Screen("xml_lab", "XML Lab", Icons.Filled.Refresh),
-                            Screen("ksu_modules", "Modules", Icons.Filled.Build),
-                        )
-                    for (subscription in subscriptions) {
-                        items.add(
-                            Screen("config${subscription.subscriptionId}", "SIM ${subscriptions.indexOf(subscription) + 1}", Icons.Filled.Settings),
-                        )
-                    }
+                        val currentDestination = currentBackStackEntry?.destination
+                        val items =
+                            arrayListOf(
+                                Screen("home", stringResource(R.string.home), Icons.Filled.Home),
+                                Screen("ims-research", "IMS", Icons.Filled.Settings),
+                                Screen("xml_lab", "XML Lab", Icons.Filled.Refresh),
+                                Screen("ksu_modules", "Modules", Icons.Filled.Build),
+                            )
+                        for (subscription in subscriptions) {
+                            items.add(
+                                Screen(
+                                    "config${subscription.subscriptionId}",
+                                    "SIM ${subscriptions.indexOf(subscription) + 1}",
+                                    Icons.Filled.Settings,
+                                ),
+                            )
+                        }
 
-                    items.forEach { screen ->
-                        NavigationBarItem(
-                            icon = { Icon(screen.icon, contentDescription = null, modifier = Modifier.height(19.dp)) },
-                            label = {
-                                Text(screen.title, fontSize = 9.sp, maxLines = 1)
-                            },
-                            selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Color.White,
-                                selectedTextColor = Color.White,
-                                unselectedIconColor = Color(0xFFB8B8BF),
-                                unselectedTextColor = Color(0xFFB8B8BF),
-                                indicatorColor = when (themeMode) {
-                                    "glass" -> Color(0x668FA7CF)
-                                    "miuix" -> Color(0x996E8DFF)
-                                    else -> Color(0x885A5A65)
+                        items.forEach { screen ->
+                            NavigationBarItem(
+                                icon = { Icon(screen.icon, contentDescription = null, modifier = Modifier.height(19.dp)) },
+                                label = {
+                                    Text(screen.title, fontSize = 9.sp, maxLines = 1)
                                 },
-                            ),
-                            onClick = {
-                                navController.navigate(screen.route) {
-                                    // Pop up to the start destination of the graph to
-                                    // avoid building up a large stack of destinations
-                                    // on the back stack as users select items
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = false
+                                selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                                colors =
+                                    NavigationBarItemDefaults.colors(
+                                        selectedIconColor = Color.White,
+                                        selectedTextColor = Color.White,
+                                        unselectedIconColor = Color(0xFFB8B8BF),
+                                        unselectedTextColor = Color(0xFFB8B8BF),
+                                        indicatorColor =
+                                            when (themeMode) {
+                                                "glass" -> Color(0x668FA7CF)
+                                                "miuix" -> Color(0x996E8DFF)
+                                                else -> Color(0x885A5A65)
+                                            },
+                                    ),
+                                onClick = {
+                                    navController.navigate(screen.route) {
+                                        // Pop up to the start destination of the graph to
+                                        // avoid building up a large stack of destinations
+                                        // on the back stack as users select items
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = false
+                                        }
+                                        // Avoid multiple copies of the same destination when
+                                        // reselecting the same item
+                                        launchSingleTop = true
+                                        // Restore state when reselecting a previously selected item
+                                        restoreState = false
                                     }
-                                    // Avoid multiple copies of the same destination when
-                                    // reselecting the same item
-                                    launchSingleTop = true
-                                    // Restore state when reselecting a previously selected item
-                                    restoreState = false
-                                }
-                            },
-                        )
-                    }
+                                },
+                            )
+                        }
                     }
                 }
             }
         },
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().background(
-            when (backgroundMode) {
-                "graphite" -> Color(0xFF22252C)
-                "wine" -> Color(0xFF240D1B)
-                else -> Color.Black
-            },
-        )) {
+        Box(
+            Modifier.fillMaxSize().background(
+                when (backgroundMode) {
+                    "graphite" -> Color(0xFF22252C)
+                    "wine" -> Color(0xFF240D1B)
+                    else -> Color.Black
+                },
+            ),
+        ) {
             if (backgroundMode == "photo" && backgroundUri.isNotEmpty()) {
                 val bitmap by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, backgroundUri) {
-                    value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        runCatching {
-                            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                            context.contentResolver.openInputStream(Uri.parse(backgroundUri))?.use {
-                                BitmapFactory.decodeStream(it, null, options)
-                            }
-                            var sample = 1
-                            while (options.outWidth / sample > 2048 || options.outHeight / sample > 2048) sample *= 2
-                            options.inJustDecodeBounds = false; options.inSampleSize = sample
-                            context.contentResolver.openInputStream(Uri.parse(backgroundUri))?.use {
-                                BitmapFactory.decodeStream(it, null, options)?.asImageBitmap()
-                            }
-                        }.getOrNull()
-                    }
+                    value =
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            runCatching {
+                                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                context.contentResolver.openInputStream(Uri.parse(backgroundUri))?.use {
+                                    BitmapFactory.decodeStream(it, null, options)
+                                }
+                                var sample = 1
+                                while (options.outWidth / sample > 2048 || options.outHeight / sample > 2048) sample *= 2
+                                options.inJustDecodeBounds = false
+                                options.inSampleSize = sample
+                                context.contentResolver.openInputStream(Uri.parse(backgroundUri))?.use {
+                                    BitmapFactory.decodeStream(it, null, options)?.asImageBitmap()
+                                }
+                            }.getOrNull()
+                        }
                 }
                 bitmap?.let { image ->
-                    Image(image, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = photoOpacity)
+                    Image(
+                        image,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        alpha = photoOpacity,
+                    )
                 }
             }
             NavHost(navController, startDestination = "home", Modifier.padding(innerPadding)) {
@@ -370,11 +430,23 @@ fun PixelIMSApp() {
                 composable("xml_lab", "IMS XML Lab") { ImsXmlLab() }
                 composable("profiles0", "SIM 1 IMS profiles") { SamsungImsProfiles(0) }
                 composable("profiles1", "SIM 2 IMS profiles") { SamsungImsProfiles(1) }
-                composable("ksu_modules", "KernelSU Modules") { KernelSuModules(openImsModuleBuilder = { navController.navigate("xml_lab") }) }
+                composable(
+                    "ksu_modules",
+                    "KernelSU Modules",
+                ) { KernelSuModules(openImsModuleBuilder = { navController.navigate("xml_lab") }) }
                 for (subscription in subscriptions) {
-                    navigation(startDestination = "config${subscription.subscriptionId}", route = "config${subscription.subscriptionId}root") {
-                        composable("config${subscription.subscriptionId}", "SIM config") { Config(navController, subscription.subscriptionId) }
-                        composable("config${subscription.subscriptionId}/dump", "Config dump") { DumpedConfig(context, subscription.subscriptionId) }
+                    navigation(
+                        startDestination = "config${subscription.subscriptionId}",
+                        route = "config${subscription.subscriptionId}root",
+                    ) {
+                        composable(
+                            "config${subscription.subscriptionId}",
+                            "SIM config",
+                        ) { Config(navController, subscription.subscriptionId) }
+                        composable(
+                            "config${subscription.subscriptionId}/dump",
+                            "Config dump",
+                        ) { DumpedConfig(context, subscription.subscriptionId) }
                         composable("config${subscription.subscriptionId}/edit", "Expert mode") { Editor(subscription.subscriptionId) }
                     }
                 }
