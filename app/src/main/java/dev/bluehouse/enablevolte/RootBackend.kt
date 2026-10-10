@@ -25,6 +25,11 @@ object RootBackend {
         return available
     }
 
+    @Synchronized fun invalidate() {
+        inventory = null
+        cachedConfig = null
+    }
+
     fun needed(): Boolean =
         available &&
             !runCatching {
@@ -39,7 +44,8 @@ object RootBackend {
         data: String = "",
     ): String {
         check(available) { "Root not authorized for this app" }
-        val apk = context.applicationInfo.sourceDir.replace("'", "'\''")
+        val apk = context.applicationInfo.sourceDir
+        require(!apk.contains("'")) { "Unsupported APK path" }
         return RootCommands
             .run(
                 "CLASSPATH='$apk' /system/bin/app_process /system/bin " +

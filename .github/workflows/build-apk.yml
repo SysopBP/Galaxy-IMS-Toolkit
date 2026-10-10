@@ -67,6 +67,8 @@ jobs:
         env:
           BUILD_TYPE: ${{ inputs.build-type }}
           RUN_ID: ${{ github.run_id }}
+      - name: Verify packaged root and observer routes
+        run: python3 ci/check_apk.py
       - name: align APK with zipalign
         if: ${{ inputs.build-type == 'release' }}
         run: $ANDROID_SDK_ROOT/build-tools/34.0.0/zipalign -v -p 4 app/build/outputs/apk/${BUILD_TYPE}/${FILENAME} app-unsigned-aligned.apk

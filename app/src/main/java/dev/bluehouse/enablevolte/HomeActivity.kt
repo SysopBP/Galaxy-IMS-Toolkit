@@ -187,6 +187,7 @@ fun PixelIMSApp() {
                 ) {
                     dev.bluehouse.enablevolte.InterfaceCache.cache
                         .clear()
+                    RootBackend.invalidate()
                     runCatching { loadApplication() }
                 }
             }

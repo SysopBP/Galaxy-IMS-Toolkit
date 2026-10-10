@@ -62,6 +62,13 @@ open class VoLTEConfigToggleQSTileService(
 
     override fun onStartListening() {
         super.onStartListening()
+        Thread {
+            RootBackend.probe()
+            refreshTile()
+        }.start()
+    }
+
+    private fun refreshTile() {
         qsTile.state =
             when (this.volteEnabled) {
                 true -> Tile.STATE_ACTIVE
@@ -111,9 +118,17 @@ open class VoLTEConfigToggleQSTileService(
     override fun onClick() {
         super.onClick()
         if (isLocked) {
-            unlockAndRun { Thread { toggleVoLTEStatus() }.start() }
+            unlockAndRun {
+                Thread {
+                    RootBackend.probe()
+                    toggleVoLTEStatus()
+                }.start()
+            }
         } else {
-            Thread { toggleVoLTEStatus() }.start()
+            Thread {
+                RootBackend.probe()
+                toggleVoLTEStatus()
+            }.start()
         }
     }
 }

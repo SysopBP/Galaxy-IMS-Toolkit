@@ -482,23 +482,25 @@ fun Editor(subId: Int) {
 
     fun updateRow(data: BaseDataRow) {
         if (data.rawValue == null) return
-        when (data) {
-            is DataRow -> {
-                when (data.fieldType) {
-                    ValueType.Int -> moder.updateCarrierConfig(data.key, data.typedValue as Int)
-                    ValueType.Long -> moder.updateCarrierConfig(data.key, data.typedValue as Long)
-                    ValueType.Bool -> moder.updateCarrierConfig(data.key, data.typedValue as Boolean)
-                    ValueType.String -> moder.updateCarrierConfig(data.key, data.typedValue as String)
-                    else -> {}
+        dev.bluehouse.enablevolte.CarrierWrites.atomic {
+            when (data) {
+                is DataRow -> {
+                    when (data.fieldType) {
+                        ValueType.Int -> moder.updateCarrierConfig(data.key, data.typedValue as Int)
+                        ValueType.Long -> moder.updateCarrierConfig(data.key, data.typedValue as Long)
+                        ValueType.Bool -> moder.updateCarrierConfig(data.key, data.typedValue as Boolean)
+                        ValueType.String -> moder.updateCarrierConfig(data.key, data.typedValue as String)
+                        else -> {}
+                    }
                 }
-            }
-            is ListDataRow -> {
-                when (data.fieldType) {
-                    ValueType.Int -> moder.updateCarrierConfig(data.key, (data.typedValue as List<Int>).toIntArray())
-                    ValueType.Long -> moder.updateCarrierConfig(data.key, (data.typedValue as List<Long>).toLongArray())
-                    ValueType.Bool -> moder.updateCarrierConfig(data.key, (data.typedValue as List<Boolean>).toBooleanArray())
-                    ValueType.String -> moder.updateCarrierConfig(data.key, (data.typedValue as List<String>).toTypedArray())
-                    else -> {}
+                is ListDataRow -> {
+                    when (data.fieldType) {
+                        ValueType.Int -> moder.updateCarrierConfig(data.key, (data.typedValue as List<Int>).toIntArray())
+                        ValueType.Long -> moder.updateCarrierConfig(data.key, (data.typedValue as List<Long>).toLongArray())
+                        ValueType.Bool -> moder.updateCarrierConfig(data.key, (data.typedValue as List<Boolean>).toBooleanArray())
+                        ValueType.String -> moder.updateCarrierConfig(data.key, (data.typedValue as List<String>).toTypedArray())
+                        else -> {}
+                    }
                 }
             }
         }
@@ -562,8 +564,7 @@ fun Editor(subId: Int) {
                                 scope.launch {
                                     try {
                                         withContext(Dispatchers.IO) {
-                                            dev.bluehouse.enablevolte.CarrierWrites
-                                                .atomic { updateRow(data) }
+                                            updateRow(data)
                                         }
                                     } catch (e: Exception) {
                                         android.widget.Toast
