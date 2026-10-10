@@ -8,6 +8,10 @@
     <instrumentation
         android:name="dev.bluehouse.enablevolte.BrokerInstrumentation"
         android:targetPackage="${applicationId}"/>
+    <queries>
+        <package android:name="com.sec.imsservice" />
+        <package android:name="moe.shizuku.privileged.api" />
+    </queries>
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
