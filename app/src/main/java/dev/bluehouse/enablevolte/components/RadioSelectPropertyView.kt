@@ -40,7 +40,7 @@ fun RadioSelectPropertyUpdateDialog(
     onClose: () -> Unit,
 ) {
     val perform = rememberPrivilegedAction()
-    var newIndex by remember { mutableIntStateOf(selectedIndex ?: 0) }
+    var newIndex by remember { mutableIntStateOf(selectedIndex?.takeIf { it in values.indices } ?: -1) }
     BasicAlertDialog(onDismissRequest = onClose) {
         Surface(
             modifier =
@@ -72,6 +72,7 @@ fun RadioSelectPropertyUpdateDialog(
                         Text(stringResource(R.string.dismiss))
                     }
                     TextButton(
+                        enabled = newIndex in values.indices,
                         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary),
                         shape = ButtonDefaults.outlinedShape,
                         colors =
@@ -79,7 +80,9 @@ fun RadioSelectPropertyUpdateDialog(
                                 containerColor = MaterialTheme.colorScheme.primary,
                             ),
                         onClick = {
-                            perform { onUpdate(newIndex) }
+                            if (newIndex in values.indices) {
+                                perform { onUpdate(newIndex) }
+                            }
                             onClose()
                         },
                     ) {
@@ -111,7 +114,7 @@ fun RadioSelectPropertyView(
             )
         }
     }
-    ClickablePropertyView(label = label, value = if (selectedIndex != null) values[selectedIndex] else "") {
+    ClickablePropertyView(label = label, value = selectedIndex?.let { values.getOrNull(it) ?: "Carrier-defined format ($it)" } ?: "") {
         openDialog = true
     }
 }

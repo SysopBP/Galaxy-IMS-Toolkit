@@ -181,31 +181,37 @@ fun Config(
     }
 
     LaunchedEffect(subId, writeRevision, resumeRevision) {
-        if (checkShizukuPermission(0) == ShizukuStatus.GRANTED ||
-            dev.bluehouse.enablevolte.RootBackend
-                .needed()
-        ) {
-            if (carrierModer.deviceSupportsIMS && subId >= 0) {
-                configurable =
-                    try {
-                        withContext(Dispatchers.Default) {
-                            loadFlags()
-                            readError = ""
-                            loading = false
-                        }
+        loading = true
+        readError = ""
+        configurable = false
+        try {
+            val loaded =
+                withContext(Dispatchers.IO) {
+                    if (subId >= 0 &&
+                        (
+                            checkShizukuPermission(0) == ShizukuStatus.GRANTED ||
+                                dev.bluehouse.enablevolte.RootBackend
+                                    .needed()
+                        ) &&
+                        carrierModer.deviceSupportsIMS
+                    ) {
+                        loadFlags()
                         true
-                    } catch (e: Exception) {
-                        readError = e.message ?: "Carrier settings unavailable"
-                        loading = false
+                    } else {
                         false
                     }
-            } else {
-                loading = false
-                configurable = false
-            }
-        } else {
+                }
+            configurable = loaded
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Unable to load SIM $subId", e)
+            readError = "${e.javaClass.simpleName}: ${e.message ?: "Carrier settings unavailable"}"
+        } catch (e: LinkageError) {
+            Log.e(TAG, "Unsupported firmware API for SIM $subId", e)
+            readError = "Firmware API unavailable: ${e.javaClass.simpleName}"
+        } finally {
             loading = false
-            configurable = false
         }
     }
 
