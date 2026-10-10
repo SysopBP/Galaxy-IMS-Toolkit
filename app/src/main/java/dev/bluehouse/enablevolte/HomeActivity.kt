@@ -1,5 +1,9 @@
 package dev.bluehouse.enablevolte
 
+import kotlinx.coroutines.launch
+
+import dev.bluehouse.enablevolte.pages.SamsungImsProfiles
+
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -116,6 +120,7 @@ fun PixelIMSApp() {
     val appearancePrefs = remember(context) { context.getSharedPreferences("ims_appearance", 0) }
     var themeMode by remember { mutableStateOf(appearancePrefs.getString("theme", "oneui") ?: "oneui") }
     var backgroundMode by remember { mutableStateOf(appearancePrefs.getString("background", "black") ?: "black") }
+    var photoOpacity by remember { mutableStateOf(appearancePrefs.getFloat("photo_opacity", 0.35f)) }
     var backgroundUri by remember { mutableStateOf(appearancePrefs.getString("image_uri", "") ?: "") }
     var showAppearance by remember { mutableStateOf(false) }
     val backgroundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -135,81 +140,54 @@ fun PixelIMSApp() {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
 
     var subscriptions by remember { mutableStateOf(listOf<SubscriptionInfo>()) }
-    var navBuilder by remember {
-        mutableStateOf<NavGraphBuilder.() -> Unit>({
-            composable("xml_lab", "IMS XML Lab") { ImsXmlLab() }
-            composable("ims-research", "Samsung IMS") {
-                    GalaxyImsSettings()
-                }
-            composable("home", context.resources.getString(R.string.home)) {
-                Home(navController)
-            }
-        })
-    }
-
-    fun generateInitialNavBuilder(): (NavGraphBuilder.() -> Unit) =
-        {
-            composable("xml_lab", "IMS XML Lab") { ImsXmlLab() }
-            composable("ims-research", "Samsung IMS") { GalaxyImsSettings() }
-            composable("home", "Home") {
-                Home(navController)
-            }
-        }
-
-    fun generateNavBuilder(): (NavGraphBuilder.() -> Unit) =
-        {
-            composable("xml_lab", "IMS XML Lab") { ImsXmlLab() }
-            composable("ims-research", "Samsung IMS") {
-                GalaxyImsSettings()
-            }
-            composable("home", context.resources.getString(R.string.home)) {
-                Home(navController)
-            }
-            for (subscription in subscriptions) {
-                navigation(startDestination = "config${subscription.subscriptionId}", route = "config${subscription.subscriptionId}root") {
-                    composable("config${subscription.subscriptionId}", context.resources.getString(R.string.sim_config)) {
-                        Config(navController, subscription.subscriptionId)
-                    }
-                    composable("config${subscription.subscriptionId}/dump", context.resources.getString(R.string.config_dump_viewer)) {
-                        DumpedConfig(context, subscription.subscriptionId)
-                    }
-                    composable("config${subscription.subscriptionId}/edit", context.resources.getString(R.string.expert_mode)) {
-                        Editor(subscription.subscriptionId)
-                    }
-                }
-            }
-        }
-
+    val appScope = androidx.compose.runtime.rememberCoroutineScope()
+    var loadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun loadApplication() {
-        val shizukuStatus = checkShizukuPermission(0)
-        try {
-            when (shizukuStatus) {
-                ShizukuStatus.GRANTED -> {
-                    Log.d(dev.bluehouse.enablevolte.pages.TAG, "Shizuku granted")
-                    subscriptions = carrierModer.subscriptions
-                    navBuilder = generateNavBuilder()
-                }
-                ShizukuStatus.NOT_GRANTED -> {
-                    Shizuku.addRequestPermissionResultListener { _, grantResult ->
-                        if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                            Log.d(dev.bluehouse.enablevolte.pages.TAG, "Shizuku granted")
-                            subscriptions = carrierModer.subscriptions
-                            navBuilder = generateNavBuilder()
-                        }
-                    }
-                }
-                else -> {
-                    subscriptions = listOf()
-                    navBuilder = generateInitialNavBuilder()
-                }
+        loadJob?.cancel()
+        loadJob = appScope.launch {
+            val loaded = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    RootBackend.probe()
+                    if (checkShizukuPermission(0) == ShizukuStatus.GRANTED || RootBackend.needed())
+                        carrierModer.subscriptions else emptyList()
+                }.getOrDefault(emptyList())
             }
-        } catch (_: IllegalStateException) {
+            subscriptions = loaded
         }
     }
 
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val received = Shizuku.OnBinderReceivedListener {
+            dev.bluehouse.enablevolte.InterfaceCache.cache.clear()
+            runCatching { loadApplication() }
+        }
+        val dead = Shizuku.OnBinderDeadListener {
+            dev.bluehouse.enablevolte.InterfaceCache.cache.clear()
+            subscriptions = emptyList()
+        }
+        val permission = Shizuku.OnRequestPermissionResultListener { _, _ -> runCatching { loadApplication() } }
+        val simChanged = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context, intent: Intent) {
+                dev.bluehouse.enablevolte.InterfaceCache.cache.clear()
+                runCatching { loadApplication() }
+            }
+        }
+        Shizuku.addBinderReceivedListenerSticky(received)
+        Shizuku.addBinderDeadListener(dead)
+        Shizuku.addRequestPermissionResultListener(permission)
+        androidx.core.content.ContextCompat.registerReceiver(context, simChanged,
+            android.content.IntentFilter("android.intent.action.ACTION_SUBINFO_RECORD_UPDATED"),
+            androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
+        onDispose {
+            Shizuku.removeBinderReceivedListener(received)
+            Shizuku.removeBinderDeadListener(dead)
+            Shizuku.removeRequestPermissionResultListener(permission)
+            context.unregisterReceiver(simChanged)
+        }
+    }
     OnLifecycleEvent { _, event ->
-        if (event == Lifecycle.Event.ON_CREATE) {
-            loadApplication()
+        if (event == Lifecycle.Event.ON_CREATE || event == Lifecycle.Event.ON_RESUME) {
+            runCatching { loadApplication() }
         }
     }
     if (showAppearance) {
@@ -218,8 +196,13 @@ fun PixelIMSApp() {
             title = { Text("Appearance") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Photo brightness: ${(photoOpacity * 100).toInt()}%")
+                    androidx.compose.material3.Slider(value = photoOpacity, onValueChange = {
+                        photoOpacity = it
+                        appearancePrefs.edit().putFloat("photo_opacity", it).apply()
+                    }, valueRange = 0f..1f)
                     Text("Theme")
-                    listOf("oneui" to "One UI", "miuix" to "MIUIX inspired", "glass" to "Glass").forEach { (value, label) ->
+                    listOf("oneui" to "One UI", "miuix" to "MIUIX inspired", "glass" to "Glass", "material" to "Material").forEach { (value, label) ->
                         TextButton(onClick = {
                             themeMode = value
                             appearancePrefs.edit().putString("theme", value).apply()
@@ -361,21 +344,32 @@ fun PixelIMSApp() {
             },
         )) {
             if (backgroundMode == "photo" && backgroundUri.isNotEmpty()) {
-                val bitmap = remember(backgroundUri) {
-                    try {
-                        context.contentResolver.openInputStream(Uri.parse(backgroundUri))?.use {
-                            BitmapFactory.decodeStream(it)?.asImageBitmap()
-                        }
-                    } catch (_: Exception) { null }
+                val bitmap by androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, backgroundUri) {
+                    value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching {
+                            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            context.contentResolver.openInputStream(Uri.parse(backgroundUri))?.use {
+                                BitmapFactory.decodeStream(it, null, options)
+                            }
+                            var sample = 1
+                            while (options.outWidth / sample > 2048 || options.outHeight / sample > 2048) sample *= 2
+                            options.inJustDecodeBounds = false; options.inSampleSize = sample
+                            context.contentResolver.openInputStream(Uri.parse(backgroundUri))?.use {
+                                BitmapFactory.decodeStream(it, null, options)?.asImageBitmap()
+                            }
+                        }.getOrNull()
+                    }
                 }
-                if (bitmap != null) {
-                    Image(bitmap, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = 0.35f)
+                bitmap?.let { image ->
+                    Image(image, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = photoOpacity)
                 }
             }
             NavHost(navController, startDestination = "home", Modifier.padding(innerPadding)) {
                 composable("home", "Home") { Home(navController) }
                 composable("ims-research", "Samsung IMS") { GalaxyImsSettings() }
                 composable("xml_lab", "IMS XML Lab") { ImsXmlLab() }
+                composable("profiles0", "SIM 1 IMS profiles") { SamsungImsProfiles(0) }
+                composable("profiles1", "SIM 2 IMS profiles") { SamsungImsProfiles(1) }
                 composable("ksu_modules", "KernelSU Modules") { KernelSuModules(openImsModuleBuilder = { navController.navigate("xml_lab") }) }
                 for (subscription in subscriptions) {
                     navigation(startDestination = "config${subscription.subscriptionId}", route = "config${subscription.subscriptionId}root") {

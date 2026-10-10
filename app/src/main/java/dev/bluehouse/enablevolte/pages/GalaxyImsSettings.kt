@@ -39,26 +39,9 @@ import java.util.concurrent.TimeUnit
 private data class DiagnosticResult(val text: String, val export: String)
 
 private fun runDiagnostic(command: String): String {
-    val process = ProcessBuilder("su", "-c", command).redirectErrorStream(true).start()
-    // Drain output concurrently so dumpsys cannot deadlock on a full pipe.
-    val output = StringBuilder()
-    val reader = Thread {
-        try {
-            process.inputStream.bufferedReader().useLines { lines ->
-                lines.take(500).forEach { line ->
-                    if (output.length < 32000) output.appendLine(line.take(500))
-                }
-            }
-        } catch (_: Exception) { }
-    }
-    reader.start()
-    if (!process.waitFor(10, TimeUnit.SECONDS)) {
-        process.destroyForcibly()
-        reader.join(1000)
-        return "Timed out after 10 seconds"
-    }
-    reader.join(1000)
-    return "Exit ${process.exitValue()}: ${output.toString().take(12000)}"
+    val result = dev.bluehouse.enablevolte.RootCommands.run(command, 10, 32000)
+    return if (result.timedOut) "Command timed out" else "Exit ${result.exitCode}: ${result.output}"
+
 }
 
 // Read only the relevant Samsung registration lines at the source. The full
@@ -109,8 +92,7 @@ private fun inspectIms(context: Context): DiagnosticResult {
     } catch (e: Exception) { "Shizuku status unavailable: ${e.javaClass.simpleName}" }
     status.appendLine(shizuku)
     report.appendLine(shizuku)
-    // Binder identity is diagnostic only; this app does not yet invoke TokenX's
-    // privileged command transport. Never infer write authorization from UID alone.
+    // Identity is distinct from write capability. Each write verifies its result.
     val shizukuUid = try {
         val cls = Class.forName("rikka.shizuku.Shizuku")
         val uid = cls.getMethod("getUid").invoke(null) as? Int
@@ -122,9 +104,9 @@ private fun inspectIms(context: Context): DiagnosticResult {
         "2000" -> "Shell UID 2000 binder detected (limited permissions)"
         else -> "Binder backend UID unknown; TokenX route not verified"
     }
-    status.appendLine("Privilege route: $routeStatus")
-    report.appendLine("Privilege route: $routeStatus")
-    status.appendLine("Carrier toggles: existing Shizuku/instrumentation route; TokenX routing not enabled")
+    status.appendLine("Privilege route: " + dev.bluehouse.enablevolte.BackendStatus.describe())
+    report.appendLine("Privilege route: " + dev.bluehouse.enablevolte.BackendStatus.describe())
+    status.appendLine("Carrier toggles: authorized app Binder or standalone root worker; results require readback")
     if (rootAvailable) {
         // Never modify IMS or carrier settings here.
         val subSummary = try { privilegedSubscriptionSummary() } catch (e: Exception) {
@@ -173,6 +155,9 @@ fun GalaxyImsSettings() {
     var loading by remember { mutableStateOf(true) }
     var refresh by remember { mutableStateOf(0) }
     var exportStatus by remember { mutableStateOf("") }
+    var observerRevision by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(3000); observerRevision++ } }
+    var exportUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var showAdvanced by remember { mutableStateOf(false) }
     var lastUpdated by remember { mutableStateOf("Not yet refreshed") }
     LaunchedEffect(refresh) {
@@ -225,7 +210,11 @@ fun GalaxyImsSettings() {
                     "RCS" to "Rich communication services").forEach { (service, description) ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column { Text(service); Text(description, style = androidx.compose.material3.MaterialTheme.typography.labelSmall) }
-                        Text("Unverified", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                        val registrations = snapshot.lines().filter {
+                            it.startsWith("SIM slot ") && it.contains(" (")
+                        }
+                        val observed = remember(observerRevision, service) { dev.bluehouse.enablevolte.ObserverState.serviceSummary(context, service) }
+                        Text(observed ?: if (registrations.isNotEmpty()) "Registration available • capability unknown" else "Unknown", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
                             style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
                     }
                 }
@@ -260,13 +249,24 @@ fun GalaxyImsSettings() {
         Button(onClick = {
             try {
                 val file = File(context.getExternalFilesDir(null), "Galaxy_IMS_Diagnostics.txt")
-                file.writeText(diagnostic?.export ?: "No diagnostic results")
-                exportStatus = "Saved: ${file.absolutePath}"
+                val text = diagnostic?.export ?: "No diagnostic results"
+                exportUri = dev.bluehouse.enablevolte.DiagnosticExports.save(context, "Galaxy_IMS_Diagnostics.txt", text)
+                exportStatus = "Saved to Download/Galaxy_IMS_Diagnostics.txt"
             } catch (e: Exception) {
                 exportStatus = "Export failed: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(120)}"
             }
         }, enabled = !loading && diagnostic != null) { Text("Export diagnostic report") }
         if (exportStatus.isNotEmpty()) Text(exportStatus)
+        exportUri?.let { uri ->
+            OutlinedButton(onClick = {
+                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"; putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }, "Share IMS diagnostic"))
+            }) { Text("Share diagnostic report") }
+        }
+        dev.bluehouse.enablevolte.components.ObserverPanel()
+
         Text("No IMS configuration, CSC, or emergency calling settings are modified.")
     }
 }

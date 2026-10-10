@@ -22,12 +22,13 @@ enum class ShizukuStatus {
     GRANTED,
     NOT_GRANTED,
     STOPPED,
+    UNSUPPORTED_BACKEND,
 }
 
 /**
- * Carrier configuration requires a live, authorized System UID 1000 Shizuku
- * endpoint. A root (UID 0) endpoint is not equivalent to the System route.
- * This checks the binder serving THIS app, not a separate TokenX shell session.
+ * Authorization and backend capability are separate states. Root/System may
+ * attempt writes; Shell remains authorized but is not eligible for carrier writes.
+ * This checks this app's Binder, not a separate terminal session.
  */
 fun checkShizukuPermission(code: Int): ShizukuStatus {
     val binder = Shizuku.getBinder() ?: return ShizukuStatus.STOPPED
@@ -40,10 +41,10 @@ fun checkShizukuPermission(code: Int): ShizukuStatus {
         return ShizukuStatus.NOT_GRANTED
     }
 
-    return if (Shizuku.getUid() == android.os.Process.SYSTEM_UID) {
+    return if (Shizuku.getUid() == android.os.Process.SYSTEM_UID || Shizuku.getUid() == 0) {
         ShizukuStatus.GRANTED
     } else {
-        ShizukuStatus.NOT_GRANTED
+        ShizukuStatus.UNSUPPORTED_BACKEND
     }
 }
 
@@ -51,7 +52,7 @@ val SubscriptionInfo.uniqueName: String
     get() = "${this.displayName} (SIM ${this.simSlotIndex + 1})"
 
 fun getLatestAppVersion(handler: (String) -> Unit) {
-    "https://api.github.com/repos/kyujin-cho/pixel-volte-patch/releases"
+    "https://api.github.com/repos/SysopBP/Galaxy-IMS-Toolkit/releases"
         .httpGet()
         .header("X-GitHub-Api-Version", "2022-11-28")
         .responseJson { _, _, result ->
@@ -139,7 +140,7 @@ fun putIntoBundle(
     key: String?,
     value: Any?,
 ) {
-    requireNotNull(value != null) { "Unable to determine type of null values" }
+    requireNotNull(value) { "Unable to determine type of null values" }
     if (value is Int) {
         baseBundle.putInt(key, value)
     } else if (value is IntArray) {
@@ -156,6 +157,16 @@ fun putIntoBundle(
         baseBundle.putString(key, value)
     } else if (value is Array<*> && value.isArrayOf<String>()) {
         baseBundle.putStringArray(key, value as Array<String?>)
+    } else if (value is Double) {
+        baseBundle.putDouble(key, value)
+    } else if (value is DoubleArray) {
+        baseBundle.putDoubleArray(key, value)
+    } else if (value is PersistableBundle) {
+        when (baseBundle) {
+            is PersistableBundle -> baseBundle.putPersistableBundle(key, value)
+            is Bundle -> baseBundle.putParcelable(key, value)
+            else -> throw IllegalArgumentException("Nested bundle unavailable")
+        }
     } else if (value is Boolean) {
         baseBundle.putBoolean(key, value)
     } else if (value is BooleanArray) {

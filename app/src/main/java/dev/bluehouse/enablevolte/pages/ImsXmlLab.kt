@@ -179,7 +179,7 @@ fun ImsXmlLab() {
                     "Enter the original 64-character SHA-256 checksum"
                 }
                 val bytes = context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val data = stream.readBytes()
+                    val data = stream.readBytesBounded(2 * 1024 * 1024)
                     require(data.size <= 2 * 1024 * 1024) { "Backup exceeds 2 MB limit" }
                     data
                 } ?: error("Unable to open backup")
@@ -281,20 +281,20 @@ fun ImsXmlLab() {
                                 .digest(cscBaselineXml.toByteArray(Charsets.UTF_8))
                                 .joinToString("") { "%02x".format(it) }
                         } else "none"
-                        val audit = "CSC module export audit\\n" +
-                            "Proposed target: " + cscTargetPath + "\\n" +
-                            "Candidate SHA-256: " + candidateHashForArchive + "\\n" +
-                            "Baseline SHA-256: " + baselineHashForArchive + "\\n" +
-                            "Overlay confirmed in UI: " + cscOverlayConfirmed + "\\n" +
-                            "Status: INACTIVE; candidate and baseline are reference-only\\n"
+                        val audit = "CSC module export audit\n" +
+                            "Proposed target: " + cscTargetPath + "\n" +
+                            "Candidate SHA-256: " + candidateHashForArchive + "\n" +
+                            "Baseline SHA-256: " + baselineHashForArchive + "\n" +
+                            "Overlay confirmed in UI: " + cscOverlayConfirmed + "\n" +
+                            "Status: INACTIVE; candidate and baseline are reference-only\n"
                         val safeFiles = files + mapOf(
                             "service.sh" to (
-                                "#!/system/bin/sh\\n" +
-                                    "# Inactive; no mounts or service restarts.\\n" +
-                                    "exit 0\\n"
+                                "#!/system/bin/sh\n" +
+                                    "# Inactive; no mounts or service restarts.\n" +
+                                    "exit 0\n"
                             ),
-                            "customize.sh" to ("#!/system/bin/sh\\n" +
-                                "ui_print '- Inactive CSC reference module'\\n"),
+                            "customize.sh" to ("#!/system/bin/sh\n" +
+                                "ui_print '- Inactive CSC reference module'\n"),
                             "audit.txt" to audit,
                             "reference/candidate.xml" to cscInputXml,
                             "reference/baseline.xml" to cscBaselineXml
@@ -395,10 +395,8 @@ fun ImsXmlLab() {
             Text(if (showHookDiagnostics) "Hide Xposed diagnostics" else "Xposed / IMS diagnostics")
         }
         if (showHookDiagnostics) {
-            Text("LSPosed companion: not connected")
-            Text(hookStatus)
-            Text("Live registration events: unavailable until companion module is installed and scoped.")
-            Text("No system_server hooks or runtime overrides are enabled.")
+            dev.bluehouse.enablevolte.components.ObserverPanel()
+            Text("No system_server hooks or runtime overrides are installed.")
         }
             }
         }
@@ -765,40 +763,7 @@ private fun applyImsAttributePreviews(original: String, previews: Map<String, St
     require(previews.keys.all { it.contains("/@") && !it.contains("#") && it in keys }) {
         "Only unique XML attributes can be staged"
     }
-    val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
-    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-    factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
-    factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-    factory.isXIncludeAware = false
-    factory.isExpandEntityReferences = false
-    val document = factory.newDocumentBuilder().parse(
-        org.xml.sax.InputSource(java.io.StringReader(original)),
-    )
-    val seen = mutableSetOf<String>()
-    fun visit(element: org.w3c.dom.Element, path: String) {
-        val attrs = element.attributes
-        for (index in 0 until attrs.length) {
-            val attr = attrs.item(index)
-            val key = "$path/@${attr.nodeName}"
-            val value = previews[key] ?: continue
-            require(seen.add(key)) { "Ambiguous repeated attribute" }
-            attr.nodeValue = value
-        }
-        val children = element.childNodes
-        for (index in 0 until children.length) {
-            val child = children.item(index)
-            if (child is org.w3c.dom.Element) visit(child, "$path/${child.tagName}")
-        }
-    }
-    visit(document.documentElement, document.documentElement.tagName)
-    require(seen.containsAll(previews.keys)) { "Some attributes were not found" }
-    val transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer()
-    val output = java.io.StringWriter()
-    transformer.transform(
-        javax.xml.transform.dom.DOMSource(document),
-        javax.xml.transform.stream.StreamResult(output),
-    )
-    return output.toString()
+    return dev.bluehouse.enablevolte.XmlDraftEditor.apply(original, previews)
 }
 private fun classifyImsValue(value: String): String = when {
     value.equals("true", true) || value.equals("false", true) -> "Boolean"
@@ -807,18 +772,11 @@ private fun classifyImsValue(value: String): String = when {
     else -> "Text"
 }
 
-private fun checkImsRootBackend(): String {
-    return runCatching {
-        val process = ProcessBuilder("su", "-c", "id -u")
-            .redirectErrorStream(true).start()
-        val uid = process.inputStream.bufferedReader().readText().trim()
-        if (process.waitFor() == 0 && uid == "0") {
-            "Root backend: UID 0 verified • XML access read-only"
-        } else {
-            "Root backend unavailable (UID: ${uid.take(24)})"
-        }
-    }.getOrElse { "Root backend unavailable: ${it.javaClass.simpleName}" }
-}
+private fun checkImsRootBackend(): String = runCatching {
+    val uid = dev.bluehouse.enablevolte.RootCommands.run("id -u", 5).requireSuccess().trim()
+    if (uid == "0") "Root backend: UID 0 verified • XML inspection available"
+    else "Root backend unavailable (UID $uid)"
+}.getOrElse { "Root backend unavailable: ${it.message}" }
 
 private fun discoverImsXml(): List<XmlDocument> {
     // Prioritize paths verified on SM-S948U1, Android 17. No live files are modified.
@@ -834,10 +792,7 @@ private fun discoverImsXml(): List<XmlDocument> {
     for (directory in directories) {
         val command = "find $directory -maxdepth 6 -type f " +
             "\\( -name '*.xml' -o -name '*.json' \\) 2>/dev/null | head -250"
-        val listing = ProcessBuilder("su", "-c", command)
-            .redirectErrorStream(true).start()
-        val paths = listing.inputStream.bufferedReader().readLines()
-        listing.waitFor()
+        val paths = dev.bluehouse.enablevolte.RootCommands.run(command).requireSuccess().lines()
         for (path in paths) {
             if (!safePath.matches(path) || !seen.add(path)) continue
             val name = path.substringAfterLast('/')
@@ -848,10 +803,7 @@ private fun discoverImsXml(): List<XmlDocument> {
             val isCarrierIms = name == "imsupdate.json"
             if (!isIms && !isCarrierCsc && !isCarrierIms) continue
             val document = runCatching {
-                val proc = ProcessBuilder("su", "-c", "base64 $path")
-                    .redirectErrorStream(true).start()
-                val encoded = proc.inputStream.bufferedReader().readText().take(3_000_000)
-                require(proc.waitFor() == 0) { "Root read denied" }
+                val encoded = dev.bluehouse.enablevolte.RootCommands.run("base64 $path", maxBytes = 3_000_000).requireSuccess()
                 val bytes = Base64.decode(encoded, Base64.DEFAULT)
                 require(bytes.size <= 2 * 1024 * 1024) { "File exceeds inspection limit" }
                 if (name.endsWith(".json")) {
@@ -1004,23 +956,20 @@ private fun validateImsXml(xml: String) {
 
 /** Verify a separately provisioned TokenX UID-1000 route without requesting writes. */
 private fun checkImsSystemBackend(): String = runCatching {
-    val process = ProcessBuilder("sh", "-c", "command -v rish").redirectErrorStream(true).start()
-    val command = process.inputStream.bufferedReader().readText().trim()
-    if (process.waitFor() != 0 || command.isBlank()) {
-        "TokenX System UID 1000: client unavailable (not verified)"
-    } else {
-        "TokenX System UID 1000: client detected; connection not verified"
-    }
-}.getOrElse { "TokenX System UID 1000: unavailable" }
+    dev.bluehouse.enablevolte.BackendStatus.describe()
+}.getOrElse { "Backend unavailable: ${it.message}" }
 
 /** Detect installed Shizuku manager; runtime authorization is a separate check. */
-private fun checkImsShizukuBackend(): String = runCatching {
-    val process = ProcessBuilder("sh", "-c", "pm path moe.shizuku.privileged.api")
-        .redirectErrorStream(true).start()
-    val output = process.inputStream.bufferedReader().readText()
-    if (process.waitFor() == 0 && output.contains("package:")) {
-        "Shizuku: manager installed; binder authorization not verified"
-    } else {
-        "Shizuku: manager not detected"
+private fun checkImsShizukuBackend(): String = dev.bluehouse.enablevolte.BackendStatus.describe()
+
+private fun java.io.InputStream.readBytesBounded(limit: Int): ByteArray {
+    val output = java.io.ByteArrayOutputStream()
+    val buffer = ByteArray(4096)
+    while (true) {
+        val count = read(buffer)
+        if (count < 0) break
+        require(output.size() + count <= limit) { "File exceeds inspection limit" }
+        output.write(buffer, 0, count)
     }
-}.getOrElse { "Shizuku: detection unavailable" }
+    return output.toByteArray()
+}

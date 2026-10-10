@@ -85,14 +85,16 @@ open class VoLTEConfigToggleQSTileService(
         val moder = this.moder ?: return
         val volteEnabled = this.volteEnabled ?: return
         try {
+            CarrierWrites.atomic {
             moder.updateCarrierConfig(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL, !volteEnabled)
             moder.restartIMSRegistration()
+            }
         } catch (e: SecurityException) {
             Log.e(TAG, "System permission denied for IMS tile", e)
             qsTile.state = Tile.STATE_UNAVAILABLE
             qsTile.updateTile()
             return
-        } catch (e: IllegalStateException) {
+        } catch (e: Exception) {
             Log.e(TAG, "IMS tile update unavailable", e)
             qsTile.state = Tile.STATE_UNAVAILABLE
             qsTile.updateTile()
@@ -109,9 +111,9 @@ open class VoLTEConfigToggleQSTileService(
     override fun onClick() {
         super.onClick()
         if (isLocked) {
-            unlockAndRun { toggleVoLTEStatus() }
+            unlockAndRun { Thread { toggleVoLTEStatus() }.start() }
         } else {
-            toggleVoLTEStatus()
+            Thread { toggleVoLTEStatus() }.start()
         }
     }
 }

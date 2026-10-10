@@ -1,3 +1,11 @@
+## Galaxy IMS Toolkit 0.2 audit update
+
+See [implemented changes and validation limits](docs/AUDIT_FIXES_0.2.md) and
+[optional LSPosed observer setup](docs/LSPOSED_INTEGRATION_PLAN.md).
+Carrier writes can use authorized Root/System Binder or the app's standalone
+root worker. Firmware permissions and readback determine success.
+CSC exports are reference templates, not active overlays.
+
 # Pixel IMS: Tensor Pixel VoLTE 활성화
 
 English version available [here](https://github.com/kyujin-cho/pixel-volte-patch/blob/main/README.en.md).

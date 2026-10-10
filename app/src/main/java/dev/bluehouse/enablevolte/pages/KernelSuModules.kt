@@ -43,26 +43,9 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
 
 private fun rootCommand(command: String): String {
-    val process = ProcessBuilder("su", "-c", command).redirectErrorStream(true).start()
-    val output = StringBuilder()
-    val reader = Thread {
-        process.inputStream.bufferedReader().use { stream ->
-            val buffer = CharArray(1024)
-            while (true) {
-                val count = stream.read(buffer)
-                if (count < 0) break
-                if (output.length < 12000) output.append(buffer, 0, minOf(count, 12000 - output.length))
-            }
-        }
-    }
-    reader.start()
-    if (!process.waitFor(45, TimeUnit.SECONDS)) {
-        process.destroyForcibly()
-        reader.join(1000)
-        return "Command timed out; inspect KernelSU manager before retrying."
-    }
-    reader.join(1000)
-    return "Exit ${process.exitValue()}: ${output.toString().take(6000)}"
+    val result = dev.bluehouse.enablevolte.RootCommands.run(command, 45, 32000)
+    return if (result.timedOut) "Command timed out" else "Exit ${result.exitCode}: ${result.output}"
+
 }
 
 private fun moduleInventory(): String = rootCommand(
@@ -83,7 +66,12 @@ private fun validateModuleZip(file: File): String? {
             if (entries.size > 5000) return "Too many ZIP entries."
             if (entries.any { it.name.startsWith("/") || it.name.split('/').contains("..") }) return "Unsafe ZIP paths."
             val prop = zip.getEntry("module.prop") ?: return "Missing module.prop at ZIP root."
-            val text = zip.getInputStream(prop).bufferedReader().use { it.readText().take(8192) }
+            val text = zip.getInputStream(prop).bufferedReader().use { reader ->
+                val buffer = CharArray(8193)
+                val count = reader.read(buffer)
+                require(count <= 8192) { "module.prop too large" }
+                String(buffer, 0, maxOf(count, 0))
+            }
             if (!text.lineSequence().any { it.startsWith("id=") }) "module.prop is missing id." else null
         }
     } catch (e: Exception) { "Invalid ZIP: ${e.javaClass.simpleName}" }
@@ -109,7 +97,17 @@ fun KernelSuModules(openImsModuleBuilder: () -> Unit = {}) {
             try {
                 val file = File.createTempFile("ksu_module_", ".zip", context.cacheDir)
                 context.contentResolver.openInputStream(uri)?.use { input ->
-                    file.outputStream().use { output -> input.copyTo(output) }
+                    file.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= 150L * 1024 * 1024) { "ZIP exceeds 150 MB limit" }
+                            output.write(buffer, 0, count)
+                        }
+                    }
                 } ?: error("Unable to read selected ZIP")
                 validation = validateModuleZip(file) ?: "ZIP structure validated. Install scripts have not been audited."
                 selected = file

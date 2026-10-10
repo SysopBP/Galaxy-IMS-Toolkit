@@ -1,5 +1,7 @@
 package dev.bluehouse.enablevolte.ui.theme
 
+import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Color
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -46,8 +48,24 @@ fun EnableVoLTETheme(
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("ims_appearance", 0) }
+    var selected by remember { mutableStateOf(prefs.getString("theme", "oneui") ?: "oneui") }
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "theme") selected = prefs.getString("theme", "oneui") ?: "oneui"
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
     val colorScheme =
         when {
+            selected == "miuix" -> darkColorScheme(primary = Color(0xFF7FB5FF),
+                background = Color.Black, surface = Color(0xFF17191F), surfaceVariant = Color(0xFF242730))
+            selected == "glass" -> darkColorScheme(primary = Color(0xFFCCD9FF),
+                background = Color.Black, surface = Color(0xFF1B202A), surfaceVariant = Color(0xFF303746))
+            selected == "oneui" -> darkColorScheme(primary = Color(0xFF9BB8FF),
+                background = Color.Black, surface = Color(0xFF14171D), surfaceVariant = Color(0xFF252A34))
             dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
                 val context = LocalContext.current
                 if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

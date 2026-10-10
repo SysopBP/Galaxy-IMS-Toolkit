@@ -1,0 +1,1 @@
+<resources><string-array name="xposed_scope"><item>com.sec.imsservice</item></string-array></resources>

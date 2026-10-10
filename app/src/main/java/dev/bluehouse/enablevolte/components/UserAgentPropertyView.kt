@@ -132,6 +132,7 @@ fun UserAgentPropertyView(
     value: String?,
     onUpdate: ((String) -> Unit)? = null,
 ) {
+    val perform = rememberPrivilegedAction()
     val labels = arrayOf(stringResource(R.string.default_), stringResource(R.string.lgu))
     val values = arrayOf(stringResource(R.string.ua_default), stringResource(R.string.ua_lgu))
 
@@ -150,7 +151,7 @@ fun UserAgentPropertyView(
                 dropdownExpanded,
                 onTextUpdate = {
                     typedText = it
-                    onUpdate(typedText)
+                    perform { onUpdate(typedText) }
                 },
                 onIndexUpdate = {
                     selectedIndex = it

@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +61,8 @@ const val TAG = "HomeActivity:Home"
 @Suppress("ktlint:standard:function-naming")
 @Composable
 fun Home(navController: NavController) {
+    val rootReady by dev.bluehouse.enablevolte.RootBackend.ready.collectAsState()
+    val revision by dev.bluehouse.enablevolte.CarrierWrites.revision.collectAsState()
     val carrierModer = CarrierModer(LocalContext.current)
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -98,7 +101,7 @@ fun Home(navController: NavController) {
 
     fun loadFlags() {
         shizukuEnabled = Shizuku.pingBinder()
-        shizukuGranted = shizukuEnabled && checkShizukuPermission(0) == ShizukuStatus.GRANTED
+        shizukuGranted = shizukuEnabled && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
         phoneStateGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
         subscriptions = carrierModer.subscriptions
         deviceIMSEnabled = carrierModer.deviceSupportsIMS
@@ -134,8 +137,8 @@ fun Home(navController: NavController) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        runCatching { loadFlags() }.onFailure { Log.w(TAG, "Permission status refresh failed", it) }
+    LaunchedEffect(rootReady, revision) {
+        runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { loadFlags() } }.onFailure { Log.w(TAG, "Permission status refresh failed", it) }
         getLatestAppVersion {
             Log.d(TAG, "Fetched version $it")
             try {
@@ -199,8 +202,8 @@ fun Home(navController: NavController) {
                     val granted = phoneStateGranted
                     Text("Phone state: " + if (granted) "Granted" else "Not granted")
                     Text("Shizuku authorization: " + if (shizukuGranted) "Granted" else "Not granted")
-                    Text("TokenX UID 1000: Not verified")
-                    Text("IMS write permission: Not verified")
+                    Text(dev.bluehouse.enablevolte.BackendStatus.describe())
+                    Text("Carrier write capability: checked and read back for each operation")
                 }
                 if (permissionMessage.isNotBlank()) Text(permissionMessage)
             }
@@ -212,7 +215,7 @@ fun Home(navController: NavController) {
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("IMS & SIM", color = Color(0xFFB7C4DA), fontWeight = FontWeight.SemiBold)
-                Text(if (shizukuGranted) "App-visible SIMs: ${subscriptions.size}" else "App-visible SIMs: Unknown (authorization required)")
+                Text(if (shizukuGranted || dev.bluehouse.enablevolte.RootBackend.available) "App-visible SIMs: ${subscriptions.size}" else "App-visible SIMs: Unknown (authorization required)")
                 Text("Device IMS: ${if (deviceIMSEnabled) "Supported" else "Not verified"}")
                 subscriptions.forEachIndexed { index, sub ->
                     val registered = isIMSRegistered.getOrNull(index)
@@ -224,6 +227,8 @@ fun Home(navController: NavController) {
             Text("Galaxy IMS Toolkit", fontWeight = FontWeight.SemiBold)
             Text(BuildConfig.VERSION_NAME, color = Color(0xFFBBC4D0))
         }
+        OutlinedButton(onClick = { navController.navigate("profiles0") }, modifier = Modifier.fillMaxWidth()) { Text("SIM 1 stored IMS profiles") }
+        OutlinedButton(onClick = { navController.navigate("profiles1") }, modifier = Modifier.fillMaxWidth()) { Text("SIM 2 stored IMS profiles") }
         if (newerVersion.isNotEmpty()) {
             Text("Update available: $newerVersion", color = Color(0xFFB7C4DA))
         }

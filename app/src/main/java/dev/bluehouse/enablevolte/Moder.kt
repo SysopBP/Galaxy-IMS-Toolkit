@@ -28,7 +28,7 @@ import java.util.Calendar
 import java.util.Locale
 
 object InterfaceCache {
-    val cache = HashMap<String, IInterface>()
+    val cache = java.util.concurrent.ConcurrentHashMap<String, IInterface>()
 }
 
 open class Moder {
@@ -126,6 +126,7 @@ class CarrierModer(
 
     val subscriptions: List<SubscriptionInfo>
         get() {
+            if (RootBackend.needed()) return RootBackend.subscriptions(context)
             val sub = this.loadCachedInterface { sub }
             try {
                 return sub.getActiveSubscriptionInfoList(null, null, true) ?: emptyList()
@@ -159,7 +160,7 @@ class CarrierModer(
         get() {
             val res = Resources.getSystem()
             val volteConfigId = res.getIdentifier("config_device_volte_available", "bool", "android")
-            return res.getBoolean(volteConfigId)
+            return volteConfigId != 0 && res.getBoolean(volteConfigId)
         }
 }
 
@@ -181,6 +182,14 @@ class SubscriptionModer(
     }
 
     private fun overrideConfigUsingBroker(bundle: Bundle?) {
+        val completed = java.util.concurrent.CountDownLatch(1)
+        var failure: String? = null
+        val receiver = object : android.os.ResultReceiver(null) {
+            override fun onReceiveResult(code: Int, data: Bundle?) {
+                if (code != 0) failure = data?.getString("error") ?: "Carrier write failed"
+                completed.countDown()
+            }
+        }
         val am =
             IActivityManager.Stub.asInterface(
                 ShizukuBinderWrapper(
@@ -189,14 +198,15 @@ class SubscriptionModer(
             )
 
         val arg =
-            bundle ?: run {
+            bundle?.let { Bundle(it) } ?: run {
                 val empty = Bundle()
                 empty.putBoolean("moder_clear", true)
                 empty
             }
         arg.putInt("moder_subId", subscriptionId)
+        arg.putParcelable("moder_result", receiver)
 
-        am.startInstrumentation(
+        val launched = am.startInstrumentation(
             ComponentName(context, Class.forName("dev.bluehouse.enablevolte.BrokerInstrumentation")),
             null,
             8,
@@ -206,12 +216,16 @@ class SubscriptionModer(
             0,
             null,
         )
+        check(launched) { "Carrier broker could not start" }
+        check(completed.await(15, java.util.concurrent.TimeUnit.SECONDS)) {
+            "Carrier write timed out; refresh values before retrying"
+        }
+        failure?.let { throw IllegalStateException(it) }
     }
 
     /**
-     * Carrier configuration writes require a verified system identity.
-     * A rooted manager or TokenX session elsewhere does not authorize this app.
-     * Fail closed until the app's own Shizuku binder is running as UID 1000.
+     * Only an authorized app Binder can attempt writes. Root and System are
+     * eligible, but firmware permission checks and readback decide success.
      */
     private fun requireSystemWriteBackend() {
         val uid = try {
@@ -226,16 +240,20 @@ class SubscriptionModer(
             Log.w(TAG, "Cannot verify system binder identity", e)
             -1
         }
-        if (uid != android.os.Process.SYSTEM_UID) {
+        if (uid != android.os.Process.SYSTEM_UID && uid != 0 && !RootBackend.available) {
             throw IllegalStateException(
-                "Carrier configuration write blocked: System UID 1000 binder required; detected UID $uid. " +
-                    "Authorize this app through a verified System backend before retrying.",
+                "Carrier write needs an authorized Root or System binder; detected UID $uid. " +
+                    "Authorize this app through TokenX/Shizuku before retrying.",
             )
         }
     }
 
     private fun overrideConfig(bundle: Bundle?) {
         requireSystemWriteBackend()
+        if (RootBackend.needed()) {
+            RootBackend.write(context, subscriptionId, bundle)
+            return
+        }
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val cal = Calendar.getInstance()
         val securityPatchDate = sdf.parse(Build.VERSION.SECURITY_PATCH)
@@ -254,7 +272,7 @@ class SubscriptionModer(
     private fun publishBundle(fn: (Bundle) -> Unit) {
         val overrideBundle = Bundle()
         fn(overrideBundle)
-        this.overrideConfig(overrideBundle)
+        if (!CarrierWrites.stage(this, overrideBundle)) applyVerified(overrideBundle)
     }
 
     fun updateCarrierConfig(
@@ -322,11 +340,52 @@ class SubscriptionModer(
     }
 
     fun clearCarrierConfig() {
+        requireSystemWriteBackend()
+        CarrierBackup.save(context, subscriptionId, readConfig())
         this.overrideConfig(null)
+        CarrierWrites.revision.value += 1
+    }
+
+    fun readConfig(): PersistableBundle =
+        if (RootBackend.needed()) RootBackend.read(context, subscriptionId)
+        else getConfigForSubId(loadCachedInterface { carrierConfigLoader }, subscriptionId)
+            ?: throw IllegalStateException("Carrier config unavailable")
+
+    internal fun applyVerified(values: Bundle) {
+        requireSystemWriteBackend()
+        CarrierBackup.save(context, subscriptionId, readConfig())
+        overrideConfig(values)
+        val expected = toPersistableBundle(values)
+        repeat(30) {
+            val actual = readConfig()
+            if (expected.keySet().all { key ->
+                    sameValue(expected.get(key), actual.get(key))
+                }) return
+            Thread.sleep(100)
+        }
+        throw IllegalStateException("Carrier write completed but readback differs; refresh before retrying")
+    }
+
+    private fun sameValue(left: Any?, right: Any?): Boolean {
+        if (left is PersistableBundle && right is PersistableBundle)
+            return left.keySet() == right.keySet() && left.keySet().all { sameValue(left.get(it), right.get(it)) }
+        return java.util.Objects.deepEquals(left, right)
+    }
+
+    fun restoreSnapshot() = restoreValues(CarrierBackup.load(context, subscriptionId))
+
+    fun restoreValues(values: PersistableBundle) {
+        val current = readConfig()
+        require(values.keySet().all { it in current.keySet() }) { "Snapshot has unsupported carrier keys" }
+        applyVerified(Bundle().apply {
+            values.keySet().forEach { key -> putIntoBundle(this, key, values.get(key)) }
+        })
     }
 
     fun restartIMSRegistration() {
+        if (CarrierWrites.restart(this)) return
         requireSystemWriteBackend()
+        if (RootBackend.needed()) { RootBackend.reset(context, subscriptionId); return }
         val telephony = this.loadCachedInterface { telephony }
         val sub = this.loadCachedInterface { sub }
         telephony.resetIms(sub.getSlotIndex(this.subscriptionId))
@@ -338,9 +397,7 @@ class SubscriptionModer(
         if (subscriptionId < 0) {
             return ""
         }
-        val iCclInstance = this.loadCachedInterface { carrierConfigLoader }
-
-        val config = this.getConfigForSubId(iCclInstance, subscriptionId)
+        val config = readConfig()
         return config?.getString(key)
     }
 
@@ -350,9 +407,7 @@ class SubscriptionModer(
         if (subscriptionId < 0) {
             return false
         }
-        val iCclInstance = this.loadCachedInterface { carrierConfigLoader }
-
-        val config = this.getConfigForSubId(iCclInstance, subscriptionId)
+        val config = readConfig()
         return config?.getBoolean(key) ?: false
     }
 
@@ -362,9 +417,7 @@ class SubscriptionModer(
         if (subscriptionId < 0) {
             return -1
         }
-        val iCclInstance = this.loadCachedInterface { carrierConfigLoader }
-
-        val config = this.getConfigForSubId(iCclInstance, subscriptionId)
+        val config = readConfig()
         return config?.getInt(key) ?: -1
     }
 
@@ -374,9 +427,7 @@ class SubscriptionModer(
         if (subscriptionId < 0) {
             return -1
         }
-        val iCclInstance = this.loadCachedInterface { carrierConfigLoader }
-
-        val config = this.getConfigForSubId(iCclInstance, subscriptionId)
+        val config = readConfig()
         return config?.getLong(key) ?: -1L
     }
 
@@ -386,9 +437,7 @@ class SubscriptionModer(
         if (subscriptionId < 0) {
             return booleanArrayOf()
         }
-        val iCclInstance = this.loadCachedInterface { carrierConfigLoader }
-
-        val config = this.getConfigForSubId(iCclInstance, subscriptionId)
+        val config = readConfig()
         return config?.getBooleanArray(key) ?: BooleanArray(0)
     }
 
@@ -398,9 +447,7 @@ class SubscriptionModer(
         if (subscriptionId < 0) {
             return intArrayOf()
         }
-        val iCclInstance = this.loadCachedInterface { carrierConfigLoader }
-
-        val config = this.getConfigForSubId(iCclInstance, subscriptionId)
+        val config = readConfig()
         return config?.getIntArray(key) ?: IntArray(0)
     }
 
@@ -410,9 +457,7 @@ class SubscriptionModer(
         if (subscriptionId < 0) {
             return arrayOf()
         }
-        val iCclInstance = this.loadCachedInterface { carrierConfigLoader }
-
-        val config = this.getConfigForSubId(iCclInstance, subscriptionId)
+        val config = readConfig()
         return config?.getStringArray(key) ?: emptyArray()
     }
 
@@ -422,9 +467,7 @@ class SubscriptionModer(
         if (subscriptionId < 0) {
             return null
         }
-        val iCclInstance = this.loadCachedInterface { carrierConfigLoader }
-
-        val config = this.getConfigForSubId(iCclInstance, subscriptionId)
+        val config = readConfig()
         return config?.get(key)
     }
 
@@ -449,7 +492,9 @@ class SubscriptionModer(
     }
 
     val simSlotIndex: Int
-        get() = this.loadCachedInterface { sub }.getSlotIndex(subscriptionId)
+        get() = if (RootBackend.needed()) RootBackend.subscriptions(context)
+            .firstOrNull { it.subscriptionId == subscriptionId }?.simSlotIndex ?: -1
+        else this.loadCachedInterface { sub }.getSlotIndex(subscriptionId)
 
     val isVoLteConfigEnabled: Boolean
         get() = this.getBooleanValue(CarrierConfigManager.KEY_CARRIER_VOLTE_AVAILABLE_BOOL)
@@ -495,7 +540,9 @@ class SubscriptionModer(
         get() = this.getIntValue(CarrierConfigManager.KEY_WFC_SPN_FORMAT_IDX_INT)
 
     val carrierName: String?
-        get() = this.loadCachedInterface { telephony }.getSubscriptionCarrierName(this.subscriptionId)
+        get() = if (RootBackend.needed()) RootBackend.subscriptions(context)
+            .firstOrNull { it.subscriptionId == subscriptionId }?.carrierName?.toString()
+        else this.loadCachedInterface { telephony }.getSubscriptionCarrierName(this.subscriptionId)
 
     val showVoWifiIcon: Boolean
         get() = this.getBooleanValue(CarrierConfigManager.KEY_SHOW_WIFI_CALLING_ICON_IN_STATUS_BAR_BOOL)
@@ -555,6 +602,7 @@ class SubscriptionModer(
 
     val isIMSRegistered: Boolean
         get() {
+            if (RootBackend.needed()) return RootBackend.registered(context, subscriptionId)
             val telephony = this.loadCachedInterface { telephony }
             return telephony.isImsRegistered(this.subscriptionId)
         }

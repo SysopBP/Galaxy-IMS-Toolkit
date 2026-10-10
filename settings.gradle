@@ -10,7 +10,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven { url "https://api.xposed.info/" }
     }
 }
 rootProject.name = "EnableVoLTE"
 include ':app'
+
+include ':xposed-companion'

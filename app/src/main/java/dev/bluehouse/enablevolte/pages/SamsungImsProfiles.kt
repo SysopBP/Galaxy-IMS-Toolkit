@@ -26,11 +26,7 @@ private val SWITCH_NAMES = listOf("ims", "volte", "vowifi", "mmtel", "rcs", "vil
 
 private fun rootRead(file: String): String {
     require(Regex("^(imsprofile|imsswitch|imsconfig)_[01]\\.xml$").matches(file))
-    val process = ProcessBuilder("su", "-c", "cat $IMS_PREFS/$file").start()
-    val output = process.inputStream.bufferedReader().use { it.readText() }
-    val error = process.errorStream.bufferedReader().use { it.readText() }
-    if (process.waitFor() != 0) throw IllegalStateException("Root read unavailable: ${error.take(120)}")
-    return output
+    return dev.bluehouse.enablevolte.RootCommands.run("cat $IMS_PREFS/$file").requireSuccess()
 }
 
 private fun digest(input: String): String =
@@ -63,13 +59,13 @@ private fun snapshot(slot: Int): String {
     val profile = rootRead("imsprofile_$slot.xml")
     val switch = rootRead("imsswitch_$slot.xml")
     val otherSlot = 1 - slot
-    val otherProfile = rootRead("imsprofile_$otherSlot.xml")
-    val otherSwitch = rootRead("imsswitch_$otherSlot.xml")
+    val otherProfile = runCatching { rootRead("imsprofile_$otherSlot.xml") }.getOrNull()
+    val otherSwitch = runCatching { rootRead("imsswitch_$otherSlot.xml") }.getOrNull()
     // Do not expose full profiles, provisioning identities, or raw configuration XML.
     return buildString {
         appendLine("Slot $slot • stored Samsung IMS settings")
-        appendLine("Profile comparison: ${if (profile == otherProfile) "identical" else "different"}")
-        appendLine("Switch comparison: ${if (switch == otherSwitch) "identical" else "different"}")
+        appendLine("Profile comparison: ${if (otherProfile == null) "other SIM unavailable" else if (profile == otherProfile) "identical" else "different"}")
+        appendLine("Switch comparison: ${if (otherSwitch == null) "other SIM unavailable" else if (switch == otherSwitch) "identical" else "different"}")
         appendLine("Profile fingerprint: ${digest(profile)}")
         appendLine("Switch fingerprint: ${digest(switch)}")
         appendLine()

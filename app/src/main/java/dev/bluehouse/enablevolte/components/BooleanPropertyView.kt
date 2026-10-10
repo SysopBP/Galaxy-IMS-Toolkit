@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,7 +36,8 @@ fun BooleanPropertyView(
     minSdk: Int = Build.VERSION.SDK_INT,
     onClick: ((Boolean) -> Unit)? = null,
 ) {
-    val context = LocalContext.current
+    val perform = rememberPrivilegedAction()
+    val writing by dev.bluehouse.enablevolte.CarrierWrites.active.collectAsState()
     val localEnabled = enabled && Build.VERSION.SDK_INT >= minSdk
 
     if (toggled == null) {
@@ -55,15 +57,9 @@ fun BooleanPropertyView(
                 Text(text = label, modifier = Modifier.weight(1F), fontSize = 18.sp)
                 Switch(
                     checked = toggled,
-                    enabled = localEnabled,
+                    enabled = localEnabled && !writing,
                     onCheckedChange = { requested ->
-                        try {
-                            onClick(requested)
-                        } catch (e: SecurityException) {
-                            Toast.makeText(context, "IMS change denied: System permission required", Toast.LENGTH_LONG).show()
-                        } catch (e: IllegalStateException) {
-                            Toast.makeText(context, e.message ?: "IMS change unavailable", Toast.LENGTH_LONG).show()
-                        }
+                        perform { onClick(requested) }
                     },
                 )
             }

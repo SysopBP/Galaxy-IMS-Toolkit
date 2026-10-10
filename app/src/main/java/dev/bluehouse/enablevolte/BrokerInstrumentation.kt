@@ -24,7 +24,10 @@ class BrokerInstrumentation : Instrumentation() {
         am.startDelegateShellPermissionIdentity(Os.getuid(), null)
         try {
             val configurationManager = this.context.getSystemService(CarrierConfigManager::class.java)
-            val overrideValues = toPersistableBundle(arguments)
+            val values = Bundle(arguments).apply {
+                remove("moder_subId"); remove("moder_clear"); remove("moder_result")
+            }
+            val overrideValues = toPersistableBundle(values)
 
             try {
                 configurationManager.overrideConfig(subId, overrideValues, true)
@@ -71,6 +74,7 @@ class BrokerInstrumentation : Instrumentation() {
             return
         }
 
+        val receiver = arguments.getParcelable<android.os.ResultReceiver>("moder_result")
         val clear = arguments.getBoolean("moder_clear")
         val subId = arguments.getInt("moder_subId")
 
@@ -80,6 +84,10 @@ class BrokerInstrumentation : Instrumentation() {
             } else {
                 this.applyConfig(subId, arguments)
             }
+            receiver?.send(0, Bundle())
+        } catch (e: Exception) {
+            Log.e(TAG, "Carrier operation failed", e)
+            receiver?.send(1, Bundle().apply { putString("error", e.message ?: e.javaClass.simpleName) })
         } finally {
             finish(0, Bundle())
         }

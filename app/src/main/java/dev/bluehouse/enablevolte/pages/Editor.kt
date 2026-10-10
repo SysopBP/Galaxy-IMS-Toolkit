@@ -1,5 +1,7 @@
 package dev.bluehouse.enablevolte.pages
 
+import kotlinx.coroutines.launch
+
 import android.telephony.CarrierConfigManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -325,6 +327,7 @@ fun fieldToDataRow(
 @Composable
 fun Editor(subId: Int) {
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var sections by remember { mutableStateOf(listOf<Section>()) }
     var loading by rememberSaveable { mutableStateOf(true) }
     var saving by rememberSaveable { mutableStateOf(false) }
@@ -557,8 +560,15 @@ fun Editor(subId: Int) {
                             onClick = {
                                 dataToEdit = null
                                 saving = true
-                                updateRow(data)
-                                saving = false
+                                scope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            dev.bluehouse.enablevolte.CarrierWrites.atomic { updateRow(data) }
+                                        }
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, e.message ?: "Write failed", android.widget.Toast.LENGTH_LONG).show()
+                                    } finally { saving = false }
+                                }
                             },
                         ) { Text(stringResource(R.string.confirm)) }
                     }

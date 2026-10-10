@@ -1,5 +1,7 @@
 package dev.bluehouse.enablevolte.pages
 
+import androidx.compose.runtime.collectAsState
+
 import android.app.StatusBarManager
 import android.content.ComponentName
 import android.graphics.drawable.Icon
@@ -52,10 +54,15 @@ fun Config(
 
     val moder = SubscriptionModer(LocalContext.current, subId)
     val carrierModer = CarrierModer(LocalContext.current)
-    val carrierName = moder.carrierName
+    val carrierName = runCatching { moder.carrierName }.getOrNull()
     val scrollState = rememberScrollState()
     val context = LocalContext.current
     val cannotFindKeyText = stringResource(R.string.cannot_find_key)
+    var readError by rememberSaveable { mutableStateOf("") }
+    var resumeRevision by rememberSaveable { mutableIntStateOf(0) }
+    dev.bluehouse.enablevolte.components.OnLifecycleEvent { _, event ->
+        if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) resumeRevision++
+    }
     var configurable by rememberSaveable { mutableStateOf(false) }
     var voLTEEnabled by rememberSaveable { mutableStateOf(false) }
     var voNREnabled by rememberSaveable { mutableStateOf(false) }
@@ -81,7 +88,29 @@ fun Config(
     var reversedConfigurableItems by rememberSaveable { mutableStateOf<Map<String, String>>(mapOf()) }
     var loading by rememberSaveable { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
-    val simSlotIndex = moder.simSlotIndex
+    val simSlotIndex = runCatching { moder.simSlotIndex }.getOrDefault(-1)
+    val perform = dev.bluehouse.enablevolte.components.rememberPrivilegedAction()
+    var snapshotMessage by rememberSaveable { mutableStateOf("") }
+    val snapshotPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) perform {
+            val text = context.contentResolver.openInputStream(uri)?.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(4096)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    require(output.size() + count <= 4 * 1024 * 1024) { "Snapshot too large" }
+                    output.write(buffer, 0, count)
+                }
+                output.toString("UTF-8")
+            } ?: error("Cannot read snapshot")
+            moder.restoreValues(dev.bluehouse.enablevolte.CarrierBackup.import(context, subId, text))
+            snapshotMessage = "Imported carrier snapshot restored and readback verified"
+        }
+    }
+    val writeRevision by dev.bluehouse.enablevolte.CarrierWrites.revision.collectAsState()
     // Distinct identities: System for carrier writes; Root for module/file operations.
     var rootAvailable by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -139,17 +168,19 @@ fun Config(
             }
     }
 
-    LaunchedEffect(true) {
-        if (checkShizukuPermission(0) == ShizukuStatus.GRANTED) {
+    LaunchedEffect(subId, writeRevision, resumeRevision) {
+        if (checkShizukuPermission(0) == ShizukuStatus.GRANTED || dev.bluehouse.enablevolte.RootBackend.needed()) {
             if (carrierModer.deviceSupportsIMS && subId >= 0) {
                 configurable =
                     try {
                         withContext(Dispatchers.Default) {
                             loadFlags()
+                            readError = ""
                             loading = false
                         }
                         true
-                    } catch (e: IllegalStateException) {
+                    } catch (e: Exception) {
+                        readError = e.message ?: "Carrier settings unavailable"
                         loading = false
                         false
                     }
@@ -170,18 +201,19 @@ fun Config(
             val systemWriteReady = try {
                 Shizuku.pingBinder() &&
                     Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED &&
-                    Shizuku.getUid() == android.os.Process.SYSTEM_UID
-            } catch (_: Exception) { false }
+                    (Shizuku.getUid() == android.os.Process.SYSTEM_UID || Shizuku.getUid() == 0)
+            } catch (_: Exception) { false } || dev.bluehouse.enablevolte.RootBackend.needed()
             HeaderText(text = "Modification backends")
             Text("Root UID 0: " + if (rootAvailable) "Available for KernelSU and protected files" else "Unavailable")
-            Text("System UID 1000: " + if (systemWriteReady) "Authorized Shizuku binder" else "Not authorized")
+            Text(dev.bluehouse.enablevolte.BackendStatus.describe())
             Text("SIM ${simSlotIndex + 1} · subscription ID $subId")
-            Text("IMS carrier writes require System UID 1000; Root is not an automatic fallback.")
-            if (!systemWriteReady) {
-                HeaderText(text = "System permission required")
+            Text("Root and System binders may attempt carrier writes. Firmware permission checks still apply.")
+            if (!systemWriteReady || !configurable) {
+                if (readError.isNotEmpty()) Text(readError)
+                HeaderText(text = "Privileged backend required")
                 Text(
                     "Carrier toggles are disabled until this app is authorized through a verified " +
-                        "System UID 1000 Shizuku binder. Root UID 0 or a separate TokenX session " +
+                        "standalone root worker or Root/System Shizuku binder. A separate terminal session " +
                         "does not grant this app system write access.",
                 )
                 Text("Read-only IMS diagnostics remain available from the Samsung IMS tab.")
@@ -579,12 +611,7 @@ fun Config(
                 label = stringResource(R.string.reset_all_settings),
                 value = stringResource(R.string.reverts_to_carrier_default),
             ) {
-                moder.clearCarrierConfig()
-                scope.launch {
-                    withContext(Dispatchers.Default) {
-                        loadFlags()
-                    }
-                }
+                perform { moder.clearCarrierConfig() }
             }
             ClickablePropertyView(
                 label = stringResource(R.string.expert_mode),
@@ -602,7 +629,26 @@ fun Config(
                 label = stringResource(R.string.restart_ims_registration),
                 value = "",
             ) {
-                moder.restartIMSRegistration()
+                perform { moder.restartIMSRegistration() }
+            }
+            ClickablePropertyView("Back up current carrier configuration", "Saves effective carrier values; excludes modem provisioning") {
+                perform {
+                    dev.bluehouse.enablevolte.CarrierBackup.save(context, subId, moder.readConfig())
+                    snapshotMessage = "Current effective carrier configuration backed up"
+                }
+            }
+            ClickablePropertyView("Export saved carrier snapshot", "Save a checksummed copy to Download") {
+                perform {
+                    dev.bluehouse.enablevolte.CarrierBackup.export(context, subId)
+                    snapshotMessage = "Carrier snapshot saved to Download"
+                }
+            }
+            ClickablePropertyView("Import and restore carrier snapshot", "Requires matching device firmware and subscription ID") {
+                snapshotPicker.launch(arrayOf("application/json", "*/*"))
+            }
+            if (snapshotMessage.isNotEmpty()) Text(snapshotMessage)
+            ClickablePropertyView("Restore previous carrier snapshot", "Restores the last saved effective configuration for this SIM") {
+                perform { moder.restoreSnapshot() }
             }
             }
         }

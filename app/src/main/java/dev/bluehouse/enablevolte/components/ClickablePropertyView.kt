@@ -31,6 +31,7 @@ fun ClickablePropertyView(
     valueFontFamily: FontFamily? = null,
     onClick: (() -> Unit)? = null,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     if (value == null) {
         Column(modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)) {
             Text(text = label, fontSize = labelFontSize, modifier = Modifier.padding(bottom = 4.dp))
@@ -39,7 +40,11 @@ fun ClickablePropertyView(
         return
     }
     if (onClick != null) {
-        Surface(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(18.dp), color = Color(0x88303740)) {
+        Surface(onClick = {
+            try { onClick() } catch (e: Exception) {
+                android.widget.Toast.makeText(context, e.message ?: "Operation failed", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }, modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), shape = RoundedCornerShape(18.dp), color = Color(0x88303740)) {
             Column(modifier = Modifier.padding(top = 12.dp, bottom = 12.dp)) {
                 Text(text = label, modifier = Modifier.padding(bottom = 4.dp), fontSize = labelFontSize, fontFamily = labelFontFamily)
                 Text(text = value, color = MaterialTheme.colorScheme.outline, fontSize = valueFontSize, fontFamily = valueFontFamily)

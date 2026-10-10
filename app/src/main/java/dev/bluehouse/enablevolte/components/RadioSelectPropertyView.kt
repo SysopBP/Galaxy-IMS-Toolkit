@@ -39,6 +39,7 @@ fun RadioSelectPropertyUpdateDialog(
     onUpdate: (Int) -> Unit,
     onClose: () -> Unit,
 ) {
+    val perform = rememberPrivilegedAction()
     var newIndex by remember { mutableIntStateOf(selectedIndex ?: 0) }
     BasicAlertDialog(onDismissRequest = onClose) {
         Surface(
@@ -78,7 +79,7 @@ fun RadioSelectPropertyUpdateDialog(
                                 containerColor = MaterialTheme.colorScheme.primary,
                             ),
                         onClick = {
-                            onUpdate(newIndex)
+                            perform { onUpdate(newIndex) }
                             onClose()
                         },
                     ) {

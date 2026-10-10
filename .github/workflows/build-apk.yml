@@ -46,6 +46,11 @@ jobs:
       - name: Replace android.jar
         run: |
           curl -L https://github.com/Reginer/aosp-android-jar/raw/main/android-36/android.jar > /usr/local/lib/android/sdk/platforms/android-36/android.jar
+      - name: Verify XML draft edits
+        run: |
+          mkdir -p /tmp/ims-xml-check
+          javac -d /tmp/ims-xml-check app/src/main/java/dev/bluehouse/enablevolte/XmlDraftEditor.java ci/XmlDraftCheck.java
+          java -cp /tmp/ims-xml-check XmlDraftCheck
       - name: Build APK
         id: build_apk
         run: |
