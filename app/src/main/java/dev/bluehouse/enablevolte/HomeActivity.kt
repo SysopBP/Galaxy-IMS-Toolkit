@@ -62,10 +62,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import dev.bluehouse.enablevolte.components.OnLifecycleEvent
 import dev.bluehouse.enablevolte.pages.Config
@@ -351,7 +351,10 @@ fun PixelIMSApp() {
                                 label = {
                                     Text(screen.title, fontSize = 9.sp, maxLines = 1)
                                 },
-                                selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                                selected =
+                                    currentDestination?.hierarchy?.any { it.route == screen.route } == true ||
+                                        (currentDestination?.route == "config{subId}" &&
+                                            screen.route == "config${currentBackStackEntry?.arguments?.getInt("subId")}"),
                                 colors =
                                     NavigationBarItemDefaults.colors(
                                         selectedIconColor = Color.White,
@@ -435,21 +438,17 @@ fun PixelIMSApp() {
                     "ksu_modules",
                     "KernelSU Modules",
                 ) { KernelSuModules(openImsModuleBuilder = { navController.navigate("xml_lab") }) }
-                for (subscription in subscriptions) {
-                    navigation(
-                        startDestination = "config${subscription.subscriptionId}",
-                        route = "config${subscription.subscriptionId}root",
-                    ) {
-                        composable(
-                            "config${subscription.subscriptionId}",
-                            "SIM config",
-                        ) { Config(navController, subscription.subscriptionId) }
-                        composable(
-                            "config${subscription.subscriptionId}/dump",
-                            "Config dump",
-                        ) { DumpedConfig(context, subscription.subscriptionId) }
-                        composable("config${subscription.subscriptionId}/edit", "Expert mode") { Editor(subscription.subscriptionId) }
-                    }
+                // NavHost remembers its graph. SIMs arrive asynchronously, so register
+                // parameterized destinations even when the subscription list is empty.
+                val simArguments = listOf(navArgument("subId") { type = NavType.IntType })
+                composable("config{subId}", "SIM config", arguments = simArguments) { entry ->
+                    Config(navController, requireNotNull(entry.arguments).getInt("subId"))
+                }
+                composable("config{subId}/dump", "Config dump", arguments = simArguments) { entry ->
+                    DumpedConfig(context, requireNotNull(entry.arguments).getInt("subId"))
+                }
+                composable("config{subId}/edit", "Expert mode", arguments = simArguments) { entry ->
+                    Editor(requireNotNull(entry.arguments).getInt("subId"))
                 }
             }
         }
