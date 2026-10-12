@@ -18,7 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -38,10 +38,8 @@ import dev.bluehouse.enablevolte.components.InfiniteLoadingDialog
 import dev.bluehouse.enablevolte.components.RadioSelectPropertyView
 import dev.bluehouse.enablevolte.components.UserAgentPropertyView
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
-import java.lang.IllegalStateException
 
 @Suppress("ktlint:standard:function-naming")
 @Composable
@@ -51,12 +49,14 @@ fun Config(
 ) {
     val TAG = "HomeActivity:Config"
 
-    val moder = SubscriptionModer(LocalContext.current, subId)
-    val carrierModer = CarrierModer(LocalContext.current)
-    val carrierName = runCatching { moder.carrierName }.getOrNull()
-    val scrollState = rememberScrollState()
     val context = LocalContext.current
-    val cannotFindKeyText = stringResource(R.string.cannot_find_key)
+    val moder = remember(context, subId) { SubscriptionModer(context, subId) }
+    val carrierModer = remember(context) { CarrierModer(context) }
+    var carrierName by rememberSaveable(subId) { mutableStateOf<String?>(null) }
+    var simSlotIndex by rememberSaveable(subId) { mutableIntStateOf(-1) }
+    var systemWriteReady by remember { mutableStateOf(false) }
+    var backendDescription by remember { mutableStateOf("Checking backend…") }
+    val scrollState = rememberScrollState()
     var readError by rememberSaveable { mutableStateOf("") }
     var resumeRevision by rememberSaveable { mutableIntStateOf(0) }
     dev.bluehouse.enablevolte.components.OnLifecycleEvent { _, event ->
@@ -83,11 +83,7 @@ fun Config(
     var hideEnhancedDataIconEnabled by rememberSaveable { mutableStateOf(false) }
     var is4GPlusEnabled by rememberSaveable { mutableStateOf(false) }
     var configuredUserAgent: String? by rememberSaveable { mutableStateOf("") }
-    var configurableItems by rememberSaveable { mutableStateOf<Map<String, String>>(mapOf()) }
-    var reversedConfigurableItems by rememberSaveable { mutableStateOf<Map<String, String>>(mapOf()) }
     var loading by rememberSaveable { mutableStateOf(true) }
-    val scope = rememberCoroutineScope()
-    val simSlotIndex = runCatching { moder.simSlotIndex }.getOrDefault(-1)
     val perform =
         dev.bluehouse.enablevolte.components
             .rememberPrivilegedAction()
@@ -144,15 +140,6 @@ fun Config(
 
     fun loadFlags() {
         Log.d(TAG, "loadFlags")
-        configurableItems =
-            listOf(CarrierConfigManager::class.java, *CarrierConfigManager::class.java.declaredClasses)
-                .map {
-                    it.declaredFields.filter { field ->
-                        field.name != "KEY_PREFIX" && field.name.startsWith("KEY_")
-                    }
-                }.flatten()
-                .associate { field -> field.name to field.get(field) as String }
-        reversedConfigurableItems = configurableItems.entries.associate { (k, v) -> v to k }
         voLTEEnabled = moder.isVoLteConfigEnabled
         voNREnabled = VERSION.SDK_INT >= VERSION_CODES.UPSIDE_DOWN_CAKE && moder.isVoNrConfigEnabled
         crossSIMEnabled = moder.isCrossSIMConfigEnabled
@@ -187,6 +174,16 @@ fun Config(
         try {
             val loaded =
                 withContext(Dispatchers.IO) {
+                    // Binder calls and root workers must never run during composition.
+                    backendDescription = dev.bluehouse.enablevolte.BackendStatus.describe()
+                    systemWriteReady =
+                        runCatching {
+                            Shizuku.pingBinder() &&
+                                Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+                                (Shizuku.getUid() == android.os.Process.SYSTEM_UID || Shizuku.getUid() == 0)
+                        }.getOrDefault(false) || dev.bluehouse.enablevolte.RootBackend.needed()
+                    carrierName = runCatching { moder.carrierName }.getOrNull()
+                    simSlotIndex = runCatching { moder.simSlotIndex }.getOrDefault(-1)
                     if (subId >= 0 &&
                         (
                             checkShizukuPermission(0) == ShizukuStatus.GRANTED ||
@@ -219,26 +216,13 @@ fun Config(
         InfiniteLoadingDialog()
     } else {
         Column(modifier = Modifier.padding(Dp(16f)).verticalScroll(scrollState)) {
-            val systemWriteReady =
-                try {
-                    Shizuku.pingBinder() &&
-                        Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED &&
-                        (Shizuku.getUid() == android.os.Process.SYSTEM_UID || Shizuku.getUid() == 0)
-                } catch (_: Exception) {
-                    false
-                } ||
-                    dev.bluehouse.enablevolte.RootBackend
-                        .needed()
             HeaderText(text = "Modification backends")
             Text("Root UID 0: " + if (rootAvailable) "Available for KernelSU and protected files" else "Unavailable")
-            Text(
-                dev.bluehouse.enablevolte.BackendStatus
-                    .describe(),
-            )
+            Text(backendDescription)
             Text("SIM ${simSlotIndex + 1} · subscription ID $subId")
             Text("Root and System binders may attempt carrier writes. Firmware permission checks still apply.")
+            if (readError.isNotEmpty()) Text(readError)
             if (!systemWriteReady || !configurable) {
-                if (readError.isNotEmpty()) Text(readError)
                 HeaderText(text = "Privileged backend required")
                 Text(
                     "Carrier toggles are disabled until this app is authorized through a verified " +
@@ -600,40 +584,56 @@ fun Config(
                     }
                 }
 
-                if (VERSION.SDK_INT >= VERSION_CODES.TIRAMISU) {
-                    val statusBarManager: StatusBarManager = context.getSystemService(StatusBarManager::class.java)
-
+                if (VERSION.SDK_INT >= VERSION_CODES.TIRAMISU && simSlotIndex in 0..1) {
                     HeaderText(text = stringResource(R.string.qstile))
                     ClickablePropertyView(
                         label = stringResource(R.string.add_status_tile),
                         value = "",
                     ) {
-                        statusBarManager.requestAddTileService(
-                            ComponentName(
-                                context,
-                                // TODO: what happens if someone tries to use this feature from a triple(or even dual)-SIM phone?
-                                Class.forName("dev.bluehouse.enablevolte.SIM${simSlotIndex + 1}IMSStatusQSTileService"),
-                            ),
-                            context.getString(R.string.qs_status_tile_title, (simSlotIndex + 1).toString()),
-                            Icon.createWithResource(context, R.drawable.ic_launcher_foreground),
-                            {},
-                            {},
-                        )
+                        try {
+                            val statusBarManager = context.getSystemService(StatusBarManager::class.java)
+                                ?: error("Quick Settings service unavailable")
+                            statusBarManager.requestAddTileService(
+                                ComponentName(
+                                    context,
+                                    // TODO: what happens if someone tries to use this feature from a triple(or even dual)-SIM phone?
+                                    Class.forName("dev.bluehouse.enablevolte.SIM${simSlotIndex + 1}IMSStatusQSTileService"),
+                                ),
+                                context.getString(R.string.qs_status_tile_title, (simSlotIndex + 1).toString()),
+                                Icon.createWithResource(context, R.drawable.ic_launcher_foreground),
+                                {},
+                                {},
+                            )
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Unable to add SIM tile", e)
+                            readError = "Quick Settings unavailable: ${e.message ?: e.javaClass.simpleName}"
+                        } catch (e: LinkageError) {
+                            readError = "Quick Settings API unavailable: ${e.javaClass.simpleName}"
+                        }
                     }
                     ClickablePropertyView(
                         label = stringResource(R.string.add_toggle_tile),
                         value = "",
                     ) {
-                        statusBarManager.requestAddTileService(
-                            ComponentName(
-                                context,
-                                Class.forName("dev.bluehouse.enablevolte.SIM${simSlotIndex + 1}VoLTEConfigToggleQSTileService"),
-                            ),
-                            context.getString(R.string.qs_toggle_tile_title, (simSlotIndex + 1).toString()),
-                            Icon.createWithResource(context, R.drawable.ic_launcher_foreground),
-                            {},
-                            {},
-                        )
+                        try {
+                            val statusBarManager = context.getSystemService(StatusBarManager::class.java)
+                                ?: error("Quick Settings service unavailable")
+                            statusBarManager.requestAddTileService(
+                                ComponentName(
+                                    context,
+                                    Class.forName("dev.bluehouse.enablevolte.SIM${simSlotIndex + 1}VoLTEConfigToggleQSTileService"),
+                                ),
+                                context.getString(R.string.qs_toggle_tile_title, (simSlotIndex + 1).toString()),
+                                Icon.createWithResource(context, R.drawable.ic_launcher_foreground),
+                                {},
+                                {},
+                            )
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Unable to add SIM tile", e)
+                            readError = "Quick Settings unavailable: ${e.message ?: e.javaClass.simpleName}"
+                        } catch (e: LinkageError) {
+                            readError = "Quick Settings API unavailable: ${e.javaClass.simpleName}"
+                        }
                     }
                 }
                 HeaderText(text = stringResource(R.string.miscellaneous))
