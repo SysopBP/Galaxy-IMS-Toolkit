@@ -257,7 +257,11 @@ class SubscriptionModer(
 
     private fun overrideConfig(bundle: Bundle?) {
         requireSystemWriteBackend()
-        if (RootBackend.needed()) {
+        // A connected Shizuku binder must not suppress an already authorized
+        // root worker. Samsung firmware can start the instrumentation broker
+        // without delivering its completion callback, causing every toggle to time out.
+        if (RootBackend.available) {
+            Log.i(TAG, "Carrier write via authorized root worker: subId=$subscriptionId")
             RootBackend.write(context, subscriptionId, bundle)
             return
         }
