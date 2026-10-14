@@ -1,3 +1,4 @@
+# Modified by SysopBP, 2026-10-14: pin workflow dependencies to verified commits.
 name: Build Debug APK
 
 on:
@@ -15,7 +16,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: install ktlint
         run: |
           curl -sSLO https://github.com/pinterest/ktlint/releases/download/1.7.1/ktlint && chmod a+x ktlint && sudo mv ktlint /usr/local/bin/
@@ -25,7 +26,7 @@ jobs:
         run: |
           ktlint --reporter=checkstyle,output=build/ktlint-report.xml
         continue-on-error: true
-      - uses: yutailang0119/action-ktlint@v3
+      - uses: yutailang0119/action-ktlint@0ad7b2f5129db30cfb63fd494270c348ae5f1ad6 # v3
         with:
           report-path: build/*.xml # Support glob patterns by https://www.npmjs.com/package/@actions/glob
         continue-on-error: false # If annotations contain error of severity, action-ktlint exit 1.
@@ -44,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Post link to action run detail page
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
             try {

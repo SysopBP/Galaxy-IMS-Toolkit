@@ -1,3 +1,4 @@
+# Modified by SysopBP, 2026-10-14: pin workflow dependencies to verified commits.
 name: Tagged Release
 
 on:
@@ -11,7 +12,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: install ktlint
         run: |
           curl -sSLO https://github.com/pinterest/ktlint/releases/download/1.7.1/ktlint && chmod a+x ktlint && sudo mv ktlint /usr/local/bin/
@@ -21,7 +22,7 @@ jobs:
         run: |
           ktlint --reporter=checkstyle,output=build/ktlint-report.xml
         continue-on-error: true
-      - uses: yutailang0119/action-ktlint@v3
+      - uses: yutailang0119/action-ktlint@0ad7b2f5129db30cfb63fd494270c348ae5f1ad6 # v3
         with:
           report-path: build/*.xml # Support glob patterns by https://www.npmjs.com/package/@actions/glob
         continue-on-error: false # If annotations contain error of severity, action-ktlint exit 1.
@@ -51,16 +52,16 @@ jobs:
     steps:
       - name: Download APK
         id: download-apk
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: ${{ needs.build-release-apk.outputs.filename }}
       - name: Download App Bundle
         id: download-bundle
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: ${{ needs.build-app-bundle.outputs.filename }}
       - name: Release to GitHub
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           name: "v${{ github.ref_name }}"
           generate_release_notes: true

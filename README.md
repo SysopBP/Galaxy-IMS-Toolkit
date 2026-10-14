@@ -1,3 +1,5 @@
+> **Galaxy IMS Toolkit — independent SysopBP fork.** Based on [Pixel IMS by Kyujin Cho and contributors](https://github.com/kyujin-cho/pixel-volte-patch), with original GPLv3 licensing retained. Use [this fork's builds](https://github.com/SysopBP/Galaxy-IMS-Toolkit/actions), [issues](https://github.com/SysopBP/Galaxy-IMS-Toolkit/issues), and [privacy policy](docs/google-play-privacy-policy.md). The inherited Pixel-specific documentation below describes upstream context and may not match Samsung fork features.
+
 ## Galaxy IMS Toolkit 0.2 audit update
 
 See [implemented changes and validation limits](docs/AUDIT_FIXES_0.2.md) and
